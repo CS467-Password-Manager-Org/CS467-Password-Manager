@@ -11,6 +11,8 @@
 
 import { argon2id } from "hash-wasm";
 
+import { COMMON_PASSWORDS } from "./common-passwords.js";
+
 /**
  * The secret fields of a vault entry — the input to encryptVaultItem and
  * the output of decryptVaultItem. Exists only in memory on the client;
@@ -59,13 +61,6 @@ export const NONCE_LENGTH = 12;
 const MIN_CIPHERTEXT_LENGTH = 16;
 /** Minimum salt length. generateSalt() produces 16 bytes; shorter salts are rejected. */
 const MIN_SALT_LENGTH = 16;
-
-/** Error thrown by Phase 1 stub functions. */
-class NotImplementedError extends Error {
-  constructor(functionName: string) {
-    super(`${functionName} is a Phase 1 stub — implemented in Phase 2`);
-  }
-}
 
 // ---- binary <-> string helpers ----
 
@@ -342,25 +337,88 @@ export const DEFAULT_PASSWORD_OPTIONS: PasswordGenerationOptions = {
   includeSymbols: true,
 };
 
-/** Generates a random password from the selected character classes (CSPRNG-backed). */
-export function generateSuggestedPassword(
-  _options: PasswordGenerationOptions = DEFAULT_PASSWORD_OPTIONS,
-): string {
-  throw new NotImplementedError("generateSuggestedPassword");
+const LOWERCASE_CHARS = "abcdefghijklmnopqrstuvwxyz";
+const UPPERCASE_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+const DIGIT_CHARS = "0123456789";
+const SYMBOL_CHARS = "!@#$%^&*()-_=+[]{}";
+
+/**
+ * A uniformly random integer in [0, max) from the CSPRNG.
+ * Rejection sampling avoids modulo bias, so no value is favored and the output is harder to guess.
+ */
+function randomIntBelow(max: number): number {
+  if (!Number.isInteger(max) || max < 1) {
+    throw new Error(`max must be a positive integer, got ${max}`);
+  }
+  const limit = Math.floor(0x1_0000_0000 / max) * max; // largest multiple of max within a uint32
+  const buf = new Uint32Array(1);
+  let value: number;
+  do {
+    crypto.getRandomValues(buf);
+    value = buf[0]!;
+  } while (value >= limit);
+  return value % max;
 }
 
-/** True if the password appears in the bundled common-password list. Runs client-side only. */
-export function isCommonPassword(_password: string): boolean {
-  throw new NotImplementedError("isCommonPassword");
+/** Picks one character from a set, uniformly and CSPRNG-backed. */
+function randomChar(chars: string): string {
+  return chars[randomIntBelow(chars.length)]!;
 }
 
 /**
- * True if the password matches one already stored in the vault.
- * Takes decrypted items because comparison happens client-side only.
+ * Generates a random password from the selected character classes (CSPRNG-backed).
+ * Guarantees at least one character from every enabled class, then fills the rest from the combined pool and shuffles.
+ */
+export function generateSuggestedPassword(
+  options: PasswordGenerationOptions = DEFAULT_PASSWORD_OPTIONS,
+): string {
+  if (!Number.isInteger(options.length) || options.length < 1) {
+    throw new Error(`length must be a positive integer, got ${options.length}`);
+  }
+
+  const selectedClasses: string[] = [];
+  if (options.includeLowercase) selectedClasses.push(LOWERCASE_CHARS);
+  if (options.includeUppercase) selectedClasses.push(UPPERCASE_CHARS);
+  if (options.includeDigits) selectedClasses.push(DIGIT_CHARS);
+  if (options.includeSymbols) selectedClasses.push(SYMBOL_CHARS);
+
+  if (selectedClasses.length === 0) {
+    throw new Error("At least one character class must be enabled");
+  }
+  if (options.length < selectedClasses.length) {
+    throw new Error(
+      `length must be at least ${selectedClasses.length} to fit one of each selected class`,
+    );
+  }
+
+  const pool = selectedClasses.join("");
+  const chars: string[] = selectedClasses.map(randomChar); // one guaranteed char per class
+  // fill the rest of the password from the combined pool
+  while (chars.length < options.length) {
+    chars.push(randomChar(pool));
+  }
+
+  // Fisher-Yates shuffle so the guaranteed characters aren't stuck at the front.
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = randomIntBelow(i + 1);
+    [chars[i], chars[j]] = [chars[j]!, chars[i]!];
+  }
+  return chars.join("");
+}
+
+/** Return True if the password appears in the bundled common-password list. */
+export function isCommonPassword(password: string): boolean {
+  return COMMON_PASSWORDS.has(password.toLowerCase());
+}
+
+/**
+ * Return True if the password matches one already stored in the vault.
+ * Takes decrypted items because comparison happens client-side only. 
+ * Case-sensitive: "Hunter2" and "hunter2" are genuinely different passwords, not a reuse.
  */
 export function isReusedPassword(
-  _password: string,
-  _decryptedItems: readonly VaultItemSecret[],
+  password: string,
+  decryptedItems: readonly VaultItemSecret[],
 ): boolean {
-  throw new NotImplementedError("isReusedPassword");
+  return decryptedItems.some((item) => item.password === password);
 }
