@@ -11,6 +11,7 @@ import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import {
   createVaultItem,
+  deleteVaultItem,
   fetchMe,
   fetchVaultItems,
   fetchUserSalt,
@@ -75,6 +76,7 @@ function Routes() {
           decryptVaultItem={decryptVaultItem}
           encryptVaultItem={encryptVaultItem}
           createVaultItem={createVaultItem}
+          deleteVaultItem={deleteVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
           redirect={redirect}

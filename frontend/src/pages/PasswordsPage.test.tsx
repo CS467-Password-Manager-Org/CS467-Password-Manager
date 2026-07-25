@@ -17,6 +17,7 @@ function renderPasswordsPage(overrides = {}) {
         data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
         publicErrorMessage: '',
       }),
+    deleteVaultItem: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
     encryptionKey: STUB_KEY,
     fetchMe: vi
       .fn()
@@ -219,5 +220,74 @@ describe('PasswordsPage', () => {
     fireEvent.click(screen.getByText('Save'));
 
     expect(await screen.findByText('Error: Error saving password.')).toBeInTheDocument();
+  });
+
+  it('deletes a password entry and reloads the list when confirmed', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const props = renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Delete'));
+
+    await waitFor(() => expect(props.deleteVaultItem).toHaveBeenCalledWith('item-1'));
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalledTimes(2));
+
+    confirmSpy.mockRestore();
+  });
+
+  it('does not delete a password entry when the confirmation is canceled', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    const props = renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Delete'));
+
+    expect(props.deleteVaultItem).not.toHaveBeenCalled();
+    expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
+
+    confirmSpy.mockRestore();
+  });
+
+  it('shows an error message when deleting a password entry fails', async () => {
+    const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    const props = renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+      deleteVaultItem: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error deleting password.' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Delete'));
+
+    expect(await screen.findByText('Error: Error deleting password.')).toBeInTheDocument();
+    expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
+
+    confirmSpy.mockRestore();
   });
 });

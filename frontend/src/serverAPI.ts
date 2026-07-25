@@ -339,3 +339,45 @@ export async function createVaultItem(
     };
   }
 }
+
+const DEFAULT_DELETE_VAULT_ITEM_ERROR = 'Error deleting password.';
+
+export async function deleteVaultItem(id: string): Promise<ServerResponse<null>> {
+  const url = `/api/v1/vault/items/${encodeURIComponent(id)}`;
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_DELETE_VAULT_ITEM_ERROR,
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_DELETE_VAULT_ITEM_ERROR,
+      };
+    }
+
+    return {
+      data: null,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_DELETE_VAULT_ITEM_ERROR,
+    };
+  }
+}
