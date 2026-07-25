@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import type { VaultItemSecret } from '@app/crypto';
+import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
+import { PasswordWarnings } from './PasswordWarnings';
 
 export interface DecryptedVaultItem extends VaultItemSecret {
   id: string;
@@ -7,12 +8,17 @@ export interface DecryptedVaultItem extends VaultItemSecret {
 
 export function PasswordItem({
   item,
+  existingPasswords,
   onDelete,
   onEdit,
 }: {
   item: DecryptedVaultItem;
+  existingPasswords: readonly VaultItemSecret[];
   onDelete: (id: string) => Promise<void>;
-  onEdit: (id: string, update: { siteName: string; username: string; password: string }) => Promise<string>;
+  onEdit: (
+    id: string,
+    update: { siteName: string; username: string; password: string },
+  ) => Promise<string>;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -94,6 +100,9 @@ export function PasswordItem({
             onInput={(ev) => setEditPassword(ev.currentTarget.value)}
             value={editPassword}
           />
+          <button type="button" onClick={() => setEditPassword(generateSuggestedPassword())}>
+            Generate
+          </button>
           <button type="button" onClick={handleSaveEdit}>
             Save
           </button>
@@ -101,6 +110,8 @@ export function PasswordItem({
             Cancel
           </button>
         </form>
+
+        <PasswordWarnings password={editPassword} existingPasswords={existingPasswords} />
 
         {editError && (
           <div>

@@ -1,18 +1,21 @@
 import { useEffect, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
-import type { MeResponse, VaultItem } from '@app/shared';
-import type { VaultItemSecret } from '@app/crypto';
 import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
+import type { MeResponse, VaultItem } from '@app/shared';
+import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
+import { PasswordWarnings } from '../components/PasswordWarnings';
 
 function CreatePasswordForm({
   encryptVaultItem,
   createVaultItem,
   encryptionKey,
+  existingPasswords,
   onSaved,
 }: {
   encryptVaultItem: (item: VaultItemSecret, key: CryptoKey) => Promise<string>;
   createVaultItem: (encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
   encryptionKey: CryptoKey | undefined;
+  existingPasswords: readonly VaultItemSecret[];
   onSaved: () => Promise<void>;
 }) {
   const [formSiteName, setFormSiteName] = useState('');
@@ -72,8 +75,13 @@ function CreatePasswordForm({
           onInput={(ev) => setFormPassword(ev.currentTarget.value)}
           value={formPassword}
         />
+        <button type="button" onClick={() => setFormPassword(generateSuggestedPassword())}>
+          Generate
+        </button>
         <button onClick={handleCreatePassword}>Save</button>
       </form>
+
+      <PasswordWarnings password={formPassword} existingPasswords={existingPasswords} />
 
       {createError && (
         <div>
@@ -211,7 +219,13 @@ export function PasswordsPage({
           !passwordsError &&
           passwords.length > 0 &&
           passwords.map((p) => (
-            <PasswordItem item={p} onDelete={handleDelete} onEdit={handleEdit} key={p.id} />
+            <PasswordItem
+              item={p}
+              existingPasswords={passwords.filter((other) => other.id !== p.id)}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              key={p.id}
+            />
           ))}
       </section>
 
@@ -221,6 +235,7 @@ export function PasswordsPage({
         encryptVaultItem={encryptVaultItem}
         createVaultItem={createVaultItem}
         encryptionKey={encryptionKey}
+        existingPasswords={passwords ?? []}
         onSaved={async () => {
           if (encryptionKey) {
             await loadPasswords(encryptionKey);
