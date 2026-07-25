@@ -6,6 +6,7 @@ import {
   type RegisterRequest,
   type RegisterResponse,
   type SaltResponse,
+  type UpdateVaultItemRequest,
   type VaultItem,
   type VaultItemListResponse,
 } from '@app/shared';
@@ -336,6 +337,64 @@ export async function createVaultItem(
     return {
       data: null,
       publicErrorMessage: DEFAULT_CREATE_VAULT_ITEM_ERROR,
+    };
+  }
+}
+
+const DEFAULT_UPDATE_VAULT_ITEM_ERROR = 'Error updating password.';
+
+export async function updateVaultItem(
+  id: string,
+  encryptedData: string,
+): Promise<ServerResponse<VaultItem | null>> {
+  const url = `/api/v1/vault/items/${encodeURIComponent(id)}`;
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_UPDATE_VAULT_ITEM_ERROR,
+    };
+  }
+
+  const body: UpdateVaultItemRequest = { encryptedData };
+
+  try {
+    const response = await fetch(url, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_UPDATE_VAULT_ITEM_ERROR,
+      };
+    }
+
+    const responseBody: VaultItem = await response.json();
+    if (!responseBody.id || !responseBody.encryptedData) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_UPDATE_VAULT_ITEM_ERROR,
+      };
+    }
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_UPDATE_VAULT_ITEM_ERROR,
     };
   }
 }

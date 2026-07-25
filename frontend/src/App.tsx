@@ -17,6 +17,7 @@ import {
   fetchUserSalt,
   login,
   registerNewEmail,
+  updateVaultItem,
 } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
@@ -76,6 +77,7 @@ function Routes() {
           decryptVaultItem={decryptVaultItem}
           encryptVaultItem={encryptVaultItem}
           createVaultItem={createVaultItem}
+          updateVaultItem={updateVaultItem}
           deleteVaultItem={deleteVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}

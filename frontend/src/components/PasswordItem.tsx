@@ -8,12 +8,19 @@ export interface DecryptedVaultItem extends VaultItemSecret {
 export function PasswordItem({
   item,
   onDelete,
+  onEdit,
 }: {
   item: DecryptedVaultItem;
   onDelete: (id: string) => Promise<void>;
+  onEdit: (id: string, update: { siteName: string; username: string; password: string }) => Promise<string>;
 }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editSiteName, setEditSiteName] = useState(item.siteName);
+  const [editUsername, setEditUsername] = useState(item.username);
+  const [editPassword, setEditPassword] = useState(item.password);
+  const [editError, setEditError] = useState('');
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(item.password);
@@ -28,6 +35,79 @@ export function PasswordItem({
     await onDelete(item.id);
   };
 
+  const startEditing = () => {
+    setEditSiteName(item.siteName);
+    setEditUsername(item.username);
+    setEditPassword(item.password);
+    setEditError('');
+    setEditing(true);
+  };
+
+  const cancelEditing = () => {
+    setEditing(false);
+    setEditError('');
+  };
+
+  const handleSaveEdit = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    ev.preventDefault();
+
+    if (!editSiteName || !editUsername || !editPassword) {
+      return;
+    }
+
+    setEditError('');
+
+    const errorMessage = await onEdit(item.id, {
+      siteName: editSiteName,
+      username: editUsername,
+      password: editPassword,
+    });
+
+    if (errorMessage) {
+      setEditError(errorMessage);
+      return;
+    }
+
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="password-item">
+        <form>
+          <input
+            type="text"
+            placeholder="Site name"
+            onInput={(ev) => setEditSiteName(ev.currentTarget.value)}
+            value={editSiteName}
+          />
+          <input
+            type="text"
+            placeholder="Username"
+            onInput={(ev) => setEditUsername(ev.currentTarget.value)}
+            value={editUsername}
+          />
+          <input
+            type="password"
+            placeholder="Password"
+            onInput={(ev) => setEditPassword(ev.currentTarget.value)}
+            value={editPassword}
+          />
+          <button onClick={handleSaveEdit}>Save</button>
+          <button type="button" onClick={cancelEditing}>
+            Cancel
+          </button>
+        </form>
+
+        {editError && (
+          <div>
+            <p>Error: {editError}</p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className="password-item">
       <h5>{item.siteName}</h5>
@@ -39,6 +119,9 @@ export function PasswordItem({
         </button>
         <button type="button" onClick={handleCopy}>
           {copied ? 'Copied!' : 'Copy'}
+        </button>
+        <button type="button" onClick={startEditing}>
+          Edit
         </button>
         <button type="button" onClick={handleDelete}>
           Delete
