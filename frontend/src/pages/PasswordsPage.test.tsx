@@ -28,6 +28,8 @@ function renderPasswordsPage(overrides = {}) {
     fetchMe: vi
       .fn()
       .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
+    enrollMfa: vi.fn(),
+    activateMfa: vi.fn(),
     redirect: vi.fn(),
     ...overrides,
   };
@@ -367,6 +369,26 @@ describe('PasswordsPage', () => {
     );
     expect(props.updateVaultItem).toHaveBeenCalledWith('item-1', 'encrypted-blob');
     await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows a set up MFA prompt when MFA is not enabled', async () => {
+    const props = renderPasswordsPage();
+
+    expect(await screen.findByText('Set up MFA')).toBeInTheDocument();
+    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+  });
+
+  it('shows MFA is enabled instead of the setup prompt when the account has MFA on', async () => {
+    renderPasswordsPage({
+      fetchMe: vi.fn().mockResolvedValue({
+        data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
+        publicErrorMessage: '',
+      }),
+    });
+
+    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 
   it('shows an error message when saving an edited password entry fails', async () => {
