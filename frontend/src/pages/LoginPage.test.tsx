@@ -17,6 +17,7 @@ function renderLoginPage(overrides = {}) {
     login: vi.fn().mockResolvedValue({
       data: { token: 'some-token', tokenType: 'Bearer', expiresIn: 3600 },
       publicErrorMessage: '',
+      mfaRequired: false,
     }),
     redirect: vi.fn(),
     ...overrides,
@@ -122,6 +123,109 @@ describe('LoginPage', () => {
     fireEvent.click(screen.getByText('Submit'));
 
     expect(await screen.findByText('Error: Error logging in.')).toBeInTheDocument();
+    expect(props.redirect).not.toHaveBeenCalled();
+  });
+
+  it('shows the MFA code step when the server requires a code', async () => {
+    const props = renderLoginPage({
+      login: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '', mfaRequired: true }),
+    });
+
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Master Password');
+
+    fireEvent.input(document.querySelector('input[type="password"]')!, {
+      target: { value: 'super-secret' },
+    });
+    fireEvent.click(screen.getByText('Submit'));
+
+    expect(await screen.findByText('Enter your Authentication Code')).toBeInTheDocument();
+    expect(props.redirect).not.toHaveBeenCalled();
+  });
+
+  it('submits the MFA code and redirects on success', async () => {
+    const login = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, publicErrorMessage: '', mfaRequired: true })
+      .mockResolvedValueOnce({
+        data: { token: 'some-token', tokenType: 'Bearer', expiresIn: 3600 },
+        publicErrorMessage: '',
+        mfaRequired: false,
+      });
+    const props = renderLoginPage({ login });
+
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Master Password');
+
+    fireEvent.input(document.querySelector('input[type="password"]')!, {
+      target: { value: 'super-secret' },
+    });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Authentication Code');
+
+    fireEvent.input(screen.getByPlaceholderText('6-digit code'), { target: { value: '123456' } });
+    fireEvent.click(screen.getByText('Submit'));
+
+    await vi.waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/passwords'));
+    expect(login).toHaveBeenLastCalledWith(
+      'user@example.com',
+      bytesToBase64(SOME_AUTH_KEY),
+      '123456',
+    );
+    expect(sessionStorage.getItem('token')).toBe('some-token');
+  });
+
+  it('shows an error message and stays on the MFA step when the code is wrong', async () => {
+    const login = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, publicErrorMessage: '', mfaRequired: true })
+      .mockResolvedValueOnce({
+        data: null,
+        publicErrorMessage: 'Incorrect code. Please try again.',
+        mfaRequired: false,
+      });
+    const props = renderLoginPage({ login });
+
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Master Password');
+
+    fireEvent.input(document.querySelector('input[type="password"]')!, {
+      target: { value: 'super-secret' },
+    });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Authentication Code');
+
+    fireEvent.input(screen.getByPlaceholderText('6-digit code'), { target: { value: '000000' } });
+    fireEvent.click(screen.getByText('Submit'));
+
+    expect(
+      await screen.findByText('Error: Incorrect code. Please try again.'),
+    ).toBeInTheDocument();
+    expect(props.redirect).not.toHaveBeenCalled();
+  });
+
+  it('does not submit the MFA code when the field is empty', async () => {
+    const login = vi
+      .fn()
+      .mockResolvedValueOnce({ data: null, publicErrorMessage: '', mfaRequired: true });
+    const props = renderLoginPage({ login });
+
+    fireEvent.input(screen.getByRole('textbox'), { target: { value: 'user@example.com' } });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Master Password');
+
+    fireEvent.input(document.querySelector('input[type="password"]')!, {
+      target: { value: 'super-secret' },
+    });
+    fireEvent.click(screen.getByText('Submit'));
+    await screen.findByText('Enter your Authentication Code');
+
+    fireEvent.click(screen.getByText('Submit'));
+
+    expect(login).toHaveBeenCalledTimes(1);
     expect(props.redirect).not.toHaveBeenCalled();
   });
 });
