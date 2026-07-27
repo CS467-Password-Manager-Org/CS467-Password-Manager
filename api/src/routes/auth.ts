@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, randomBytes } from "node:crypto";
 import { Router } from "express";
 import argon2 from "argon2";
 import { authenticator } from "otplib";
@@ -15,9 +15,11 @@ import { config } from "../config.js";
 import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/require-auth.js";
+import { accountVerifyLimiter, ipVerifyLimiter } from "../middleware/rate-limit.js";
 import { signAccessToken } from "../lib/jwt.js";
 import { block } from "../lib/token-blocklist.js";
 import {
+  claimTotpStep,
   createUser,
   disableMfa,
   enableMfa,
@@ -46,15 +48,39 @@ const MFA_ISSUER = "Secure Password Manager";
 // boundary does not cause spurious rejections on an otherwise-correct code.
 authenticator.options = { window: 1 };
 
-const totpCodeSchema = z.string().trim().regex(/^\d{6}$/);
+const TOTP_STEP_SECONDS = 30;
 
-const mfaActivateSchema = z.object({
-  code: totpCodeSchema,
+// RFC 6238 5.2: an OTP is accepted once, so the matched step is recorded.
+async function verifyAndConsumeTotp(
+  userId: string,
+  secret: string,
+  code: string,
+): Promise<boolean> {
+  const nowMs = Date.now();
+  // Pinning the epoch stops a boundary request recording the neighbouring step.
+  const delta = authenticator.clone({ epoch: nowMs }).checkDelta(code, secret);
+  if (delta === null) {
+    return false;
+  }
+  const matchedStep = Math.floor(nowMs / (TOTP_STEP_SECONDS * 1000)) + delta;
+  return claimTotpStep(userId, matchedStep);
+}
+
+const TOTP_CODE_PATTERN = /^\d{6}$/;
+
+// Shape only: a missing or non-string `code` is a client bug and stays a 400.
+const mfaCodeSchema = z.object({
+  code: z.string(),
 });
 
-const mfaDisableSchema = z.object({
-  code: totpCodeSchema,
-});
+// A malformed code answers exactly like a wrong one, so clients match one error.
+function readTotpCode(body: z.infer<typeof mfaCodeSchema>): string {
+  const code = body.code.trim();
+  if (!TOTP_CODE_PATTERN.test(code)) {
+    throw new HttpError(401, "invalid_mfa_code");
+  }
+  return code;
+}
 
 authRouter.post(
   "/register",
@@ -98,14 +124,23 @@ const loginSchema = z.object({
   code: z.string().trim().max(64).optional(),
 });
 
+// Verified against for unknown emails so login timing cannot reveal existence.
+const DUMMY_AUTH_HASH = await argon2.hash(randomBytes(32).toString("base64"));
+
+// After validate() to key on the normalized email; IP layer first so a spent IP
+// budget cannot burn the victim's account budget.
 authRouter.post(
   "/login",
   validate({ body: loginSchema }),
+  ipVerifyLimiter,
+  accountVerifyLimiter,
   asyncHandler(async (req, res) => {
     const { email, authKey, code } = req.body as z.infer<typeof loginSchema>;
     const user = await findUserByEmail(email);
+    // Always run one verify so a missing account costs the same as a wrong key.
+    const keyValid = await argon2.verify(user?.auth_hash ?? DUMMY_AUTH_HASH, authKey);
     // One uniform error for unknown email and wrong key so login is not an oracle.
-    if (!user || !(await argon2.verify(user.auth_hash, authKey))) {
+    if (!user || !keyValid) {
       throw new HttpError(401, "Invalid credentials");
     }
     // The MFA check runs only after the password is proven, so asking for a code
@@ -116,7 +151,7 @@ authRouter.post(
       }
       if (
         !user.totp_secret ||
-        !authenticator.verify({ token: code, secret: user.totp_secret })
+        !(await verifyAndConsumeTotp(user.id, user.totp_secret, code))
       ) {
         throw new HttpError(401, "invalid_mfa_code");
       }
@@ -181,9 +216,11 @@ authRouter.post(
 authRouter.post(
   "/mfa/activate",
   requireAuth,
-  validate({ body: mfaActivateSchema }),
+  validate({ body: mfaCodeSchema }),
+  ipVerifyLimiter,
+  accountVerifyLimiter,
   asyncHandler(async (req, res) => {
-    const { code } = req.body as z.infer<typeof mfaActivateSchema>;
+    const code = readTotpCode(req.body as z.infer<typeof mfaCodeSchema>);
     const user = await findUserById(req.auth!.userId);
     if (!user) {
       throw new HttpError(401, "Unauthorized");
@@ -191,7 +228,7 @@ authRouter.post(
     if (!user.totp_secret) {
       throw new HttpError(400, "No pending enrollment");
     }
-    if (!authenticator.verify({ token: code, secret: user.totp_secret })) {
+    if (!(await verifyAndConsumeTotp(user.id, user.totp_secret, code))) {
       throw new HttpError(401, "invalid_mfa_code");
     }
     await enableMfa(user.id);
@@ -203,9 +240,11 @@ authRouter.post(
 authRouter.delete(
   "/mfa",
   requireAuth,
-  validate({ body: mfaDisableSchema }),
+  validate({ body: mfaCodeSchema }),
+  ipVerifyLimiter,
+  accountVerifyLimiter,
   asyncHandler(async (req, res) => {
-    const { code } = req.body as z.infer<typeof mfaDisableSchema>;
+    const code = readTotpCode(req.body as z.infer<typeof mfaCodeSchema>);
     const user = await findUserById(req.auth!.userId);
     if (!user) {
       throw new HttpError(401, "Unauthorized");
@@ -215,7 +254,7 @@ authRouter.delete(
     }
     // Disabling requires proving a current code so a stolen session cannot turn
     // MFA off on its own.
-    if (!authenticator.verify({ token: code, secret: user.totp_secret })) {
+    if (!(await verifyAndConsumeTotp(user.id, user.totp_secret, code))) {
       throw new HttpError(401, "invalid_mfa_code");
     }
     await disableMfa(user.id);

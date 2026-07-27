@@ -23,4 +23,17 @@ export const config = Object.freeze({
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
   AUTH_RATE_LIMIT_WINDOW_MS: parsePositiveInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 900000),
   AUTH_RATE_LIMIT_MAX: parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 100),
+  // Well below NIST SP 800-63B-4 3.2.2's ceiling of 100 failed attempts per account.
+  AUTH_VERIFY_RATE_LIMIT_WINDOW_MS: parsePositiveInt(
+    process.env.AUTH_VERIFY_RATE_LIMIT_WINDOW_MS,
+    900000,
+  ),
+  AUTH_VERIFY_RATE_LIMIT_MAX_PER_ACCOUNT: parsePositiveInt(
+    process.env.AUTH_VERIFY_RATE_LIMIT_MAX_PER_ACCOUNT,
+    10,
+  ),
+  AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP: parsePositiveInt(
+    process.env.AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP,
+    30,
+  ),
 });
