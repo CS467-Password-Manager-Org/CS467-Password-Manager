@@ -5,11 +5,13 @@ import { config } from "./config.js";
 import { authRouter } from "./routes/auth.js";
 import { vaultRouter } from "./routes/vault.js";
 import { errorHandler } from "./middleware/error.js";
-import { authLimiter } from "./middleware/rate-limit.js";
+import { authLimiter, RATE_LIMIT_HEADERS } from "./middleware/rate-limit.js";
 
 const app = express();
 app.use(helmet());
-app.use(cors({ origin: config.FRONTEND_ORIGIN }));
+// RateLimit-* and Retry-After are not CORS-safelisted, so the frontend can only
+// read them (to show a countdown on a 429) if they are explicitly exposed.
+app.use(cors({ origin: config.FRONTEND_ORIGIN, exposedHeaders: RATE_LIMIT_HEADERS }));
 app.use(express.json({ limit: "16kb" }));
 
 app.get("/api/health", (_req, res) => {
