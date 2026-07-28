@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
-import type { MeResponse, VaultItem } from '@app/shared';
+import { MfaSetupForm } from '../components/MfaSetupForm';
+import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from '@app/shared';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
 
@@ -105,6 +106,8 @@ export function PasswordsPage({
   deleteVaultItem,
   encryptionKey,
   fetchMe,
+  enrollMfa,
+  activateMfa,
   redirect,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
@@ -115,12 +118,15 @@ export function PasswordsPage({
   deleteVaultItem: (id: string) => Promise<ServerResponse<null>>;
   encryptionKey: CryptoKey | undefined;
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
+  enrollMfa: () => Promise<ServerResponse<MfaEnrollResponse | null>>;
+  activateMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
   redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [mfaEnabled, setMfaEnabled] = useState(false);
 
   const loadPasswords = async (key: CryptoKey) => {
     const response = await fetchVaultItems();
@@ -190,6 +196,7 @@ export function PasswordsPage({
       const { data } = await fetchMe();
       const email = data?.email ?? '';
       setUserEmail(email);
+      setMfaEnabled(data?.mfaEnabled ?? false);
 
       if (!email || !encryptionKey) {
         redirect('/login');
@@ -206,6 +213,17 @@ export function PasswordsPage({
     <div>
       <h2>Passwords</h2>
       {userEmail && <p>Logged in as {userEmail}</p>}
+
+      {mfaEnabled ? (
+        <p>Multi-factor authentication is enabled.</p>
+      ) : (
+        <MfaSetupForm
+          enrollMfa={enrollMfa}
+          activateMfa={activateMfa}
+          onEnabled={() => setMfaEnabled(true)}
+        />
+      )}
+
       <section className="basic-flex">
         {passwordsError && (
           <section>

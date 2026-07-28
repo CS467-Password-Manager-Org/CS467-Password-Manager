@@ -10,8 +10,10 @@ import {
 import './App.css';
 import { LoginPage } from './pages/LoginPage';
 import {
+  activateMfa,
   createVaultItem,
   deleteVaultItem,
+  enrollMfa,
   fetchMe,
   fetchVaultItems,
   fetchUserSalt,
@@ -81,6 +83,8 @@ function Routes() {
           deleteVaultItem={deleteVaultItem}
           encryptionKey={keys?.encryptionKey}
           fetchMe={fetchMe}
+          enrollMfa={enrollMfa}
+          activateMfa={activateMfa}
           redirect={redirect}
         />
       );

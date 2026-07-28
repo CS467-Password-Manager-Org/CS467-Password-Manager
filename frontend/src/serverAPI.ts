@@ -3,6 +3,9 @@ import {
   type LoginRequest,
   type LoginResponse,
   type MeResponse,
+  type MfaActivateRequest,
+  type MfaEnrollResponse,
+  type MfaStatusResponse,
   type RegisterRequest,
   type RegisterResponse,
   type SaltResponse,
@@ -18,6 +21,14 @@ export type ServerResponse<T> = {
 };
 
 const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
+
+function rateLimitMessage(response: Response): string {
+  const retryAfter = Number(response.headers.get('Retry-After'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return `Too many attempts. Please try again in ${retryAfter}s.`;
+  }
+  return 'Too many attempts. Please try again later.';
+}
 
 const DEFAULT_LOGIN_ERROR = 'Error logging in.';
 
@@ -125,15 +136,21 @@ export async function registerNewEmail(
   }
 }
 
-export async function login(
-  email: string,
-  authKey: string,
-): Promise<ServerResponse<LoginResponse | null>> {
+export type LoginResult = {
+  data: LoginResponse | null;
+  publicErrorMessage: string;
+  // True when the credentials were valid but the account requires an MFA code
+  // that wasn't provided. If true, resubmit Login with an MFA code.
+  mfaRequired: boolean;
+};
+
+export async function login(email: string, authKey: string, code?: string): Promise<LoginResult> {
   const url = '/api/v1/auth/login';
 
   const body: LoginRequest = {
     email,
     authKey,
+    ...(code ? { code } : {}),
   };
 
   try {
@@ -147,14 +164,26 @@ export async function login(
 
     if (!response.ok) {
       let publicMessage = DEFAULT_LOGIN_ERROR;
+      let mfaRequired = false;
 
       if (response.status >= 500 && response.status < 600) {
         publicMessage = DEFAULT_SERVER_ERROR;
+      } else if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
+      } else if (response.status === 401) {
+        const errorBody = await response.json().catch(() => null);
+        if (errorBody?.error === 'mfa_required') {
+          mfaRequired = true;
+          publicMessage = '';
+        } else if (errorBody?.error === 'invalid_mfa_code') {
+          publicMessage = 'Incorrect code. Please try again.';
+        }
       }
 
       return {
         data: null,
         publicErrorMessage: publicMessage,
+        mfaRequired,
       };
     }
 
@@ -164,18 +193,21 @@ export async function login(
       return {
         data: null,
         publicErrorMessage: DEFAULT_LOGIN_ERROR,
+        mfaRequired: false,
       };
     }
 
     return {
       data: responseJson,
       publicErrorMessage: '',
+      mfaRequired: false,
     };
   } catch (error) {
     console.error(error);
     return {
       data: null,
       publicErrorMessage: DEFAULT_LOGIN_ERROR,
+      mfaRequired: false,
     };
   }
 }
@@ -437,6 +469,122 @@ export async function deleteVaultItem(id: string): Promise<ServerResponse<null>>
     return {
       data: null,
       publicErrorMessage: DEFAULT_DELETE_VAULT_ITEM_ERROR,
+    };
+  }
+}
+
+const DEFAULT_MFA_ENROLL_ERROR = 'Error starting MFA setup.';
+
+export async function enrollMfa(): Promise<ServerResponse<MfaEnrollResponse | null>> {
+  const url = '/api/v1/auth/mfa/enroll';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_ENROLL_ERROR,
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      console.error(response);
+
+      let publicMessage = DEFAULT_MFA_ENROLL_ERROR;
+      if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
+      }
+
+      return {
+        data: null,
+        publicErrorMessage: publicMessage,
+      };
+    }
+
+    const responseBody: MfaEnrollResponse = await response.json();
+    if (!responseBody.secret || !responseBody.otpauthUri) {
+      console.error('Invalid response: ', response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_MFA_ENROLL_ERROR,
+      };
+    }
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_ENROLL_ERROR,
+    };
+  }
+}
+
+const DEFAULT_MFA_ACTIVATE_ERROR = 'Error verifying code.';
+
+export async function activateMfa(code: string): Promise<ServerResponse<MfaStatusResponse | null>> {
+  const url = '/api/v1/auth/mfa/activate';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_ACTIVATE_ERROR,
+    };
+  }
+
+  const body: MfaActivateRequest = { code };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let publicMessage = DEFAULT_MFA_ACTIVATE_ERROR;
+
+      const errorBody = await response.json().catch(() => null);
+      if (errorBody?.error === 'invalid_mfa_code') {
+        publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
+      } else if (response.status >= 500 && response.status < 600) {
+        publicMessage = DEFAULT_SERVER_ERROR;
+      }
+
+      return {
+        data: null,
+        publicErrorMessage: publicMessage,
+      };
+    }
+
+    const responseBody: MfaStatusResponse = await response.json();
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_ACTIVATE_ERROR,
     };
   }
 }

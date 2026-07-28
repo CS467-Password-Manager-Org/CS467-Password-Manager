@@ -1,15 +1,19 @@
 import { useState } from 'react';
-import { type ServerResponse } from '../serverAPI';
-import type { LoginResponse, SaltResponse } from '@app/shared';
+import { type LoginResult } from '../serverAPI';
+import type { ServerResponse } from '../serverAPI';
+import type { SaltResponse } from '@app/shared';
 import { base64ToBytes, bytesToBase64, type DerivedKeys } from '@app/crypto';
 
-// Login is a four step process.
+// Login is a five step process.
 //   1. A user enters their email and we fetch the salt associated with that email.
 //   2. A user enters their master password. We use this and the salt from step 1
 //      to derive an auth key.
-//   3. We send the auth key to the server for validation. If it is valid, the server
-//      sets a bearer token in a secure cookie that authorizes future requests.
-//   4. We redirect the user to the passwords page.
+//   3. We send the auth key to the server for validation. If the account has MFA
+//      enabled, the server rejects this with mfa_required instead of a token.
+//   4. If a code is required, the user enters it and we resend the auth key with
+//      the code. If it is valid, the server sets a bearer token that authorizes
+//      future requests.
+//   5. We redirect the user to the passwords page.
 export function LoginPage({
   fetchUserSalt,
   deriveKeys,
@@ -18,7 +22,7 @@ export function LoginPage({
 }: {
   fetchUserSalt: (email: string) => Promise<ServerResponse<SaltResponse | null>>;
   deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
-  login: (email: string, authKey: string) => Promise<ServerResponse<LoginResponse | null>>;
+  login: (email: string, authKey: string, code?: string) => Promise<LoginResult>;
   redirect: (newPath: string) => void;
 }) {
   const [formEmail, setFormEmail] = useState('');
@@ -27,6 +31,11 @@ export function LoginPage({
 
   const [formPassword, setFormPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+
+  const [authKey, setAuthKey] = useState('');
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [formMfaCode, setFormMfaCode] = useState('');
+  const [mfaError, setMfaError] = useState('');
 
   const handleFetchUserSalt = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
@@ -59,7 +68,15 @@ export function LoginPage({
 
     try {
       const { authKey } = await deriveKeys(formPassword, userSalt);
-      const { data, publicErrorMessage } = await login(formEmail, bytesToBase64(authKey));
+      const authKeyBase64 = bytesToBase64(authKey);
+      setAuthKey(authKeyBase64);
+
+      const { data, publicErrorMessage, mfaRequired } = await login(formEmail, authKeyBase64);
+      if (mfaRequired) {
+        setMfaRequired(true);
+        return;
+      }
+
       if (!data) {
         setLoginError(publicErrorMessage);
         return;
@@ -73,6 +90,33 @@ export function LoginPage({
     } catch (e) {
       console.error(e);
       setLoginError('Error logging in.');
+    }
+  };
+
+  const handleSubmitMfaCode = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+    ev.preventDefault();
+
+    if (!formMfaCode) {
+      return;
+    }
+
+    setMfaError('');
+
+    try {
+      const { data, publicErrorMessage } = await login(formEmail, authKey, formMfaCode);
+      if (!data) {
+        setMfaError(publicErrorMessage);
+        return;
+      }
+
+      // TODO: store in sessionStorage for now, not secure. We probably want to
+      // move to a cookie.
+      sessionStorage.setItem('token', data.token);
+
+      redirect('/passwords');
+    } catch (e) {
+      console.error(e);
+      setMfaError('Error logging in.');
     }
   };
 
@@ -97,6 +141,27 @@ export function LoginPage({
           {fetchUserSaltError && (
             <div>
               <p>Error: {fetchUserSaltError}</p>
+            </div>
+          )}
+        </>
+      ) : mfaRequired ? (
+        <>
+          <h3>Enter your Authentication Code</h3>
+          <form>
+            <input
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="6-digit code"
+              onInput={(ev) => setFormMfaCode(ev.currentTarget.value)}
+              value={formMfaCode}
+            />
+            <button onClick={handleSubmitMfaCode}>Submit</button>
+          </form>
+
+          {mfaError && (
+            <div>
+              <p>Error: {mfaError}</p>
             </div>
           )}
         </>
