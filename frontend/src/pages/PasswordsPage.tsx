@@ -105,6 +105,7 @@ export function PasswordsPage({
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
   const loadPasswords = async (key: CryptoKey) => {
@@ -123,10 +124,11 @@ export function PasswordsPage({
     try {
       const passwords = await Promise.all(
         vaultItems.map(async (item) => ({
-          id: item.id,
           ...(await decryptVaultItem(item.encryptedData, key)),
+          id: item.id,
         })),
       );
+      setPasswordsError('');
       setPasswords(passwords);
     } catch {
       setPasswordsError('Unable to load your passwords.');
@@ -134,9 +136,10 @@ export function PasswordsPage({
   };
 
   const handleDelete = async (id: string) => {
+    setDeleteError('');
     const { publicErrorMessage } = await deleteVaultItem(id);
     if (publicErrorMessage) {
-      setPasswordsError(publicErrorMessage);
+      setDeleteError(publicErrorMessage);
       return;
     }
 
@@ -170,6 +173,12 @@ export function PasswordsPage({
         {passwordsError && (
           <section>
             <h2>Error: {passwordsError}</h2>
+          </section>
+        )}
+
+        {deleteError && (
+          <section>
+            <h2>Error: {deleteError}</h2>
           </section>
         )}
 

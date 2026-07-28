@@ -286,6 +286,7 @@ describe('PasswordsPage', () => {
     fireEvent.click(screen.getByText('Delete'));
 
     expect(await screen.findByText('Error: Error deleting password.')).toBeInTheDocument();
+    expect(screen.getByText('Email')).toBeInTheDocument();
     expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
 
     confirmSpy.mockRestore();
