@@ -15,7 +15,7 @@ import { config } from "../config.js";
 import { asyncHandler, HttpError } from "../middleware/error.js";
 import { validate } from "../middleware/validate.js";
 import { requireAuth } from "../middleware/require-auth.js";
-import { accountVerifyLimiter, ipVerifyLimiter } from "../middleware/rate-limit.js";
+import { accountVerifyLimiter, ipVerifyLimiter, markMfaChallengeIssued } from "../middleware/rate-limit.js";
 import { signAccessToken } from "../lib/jwt.js";
 import { block } from "../lib/token-blocklist.js";
 import {
@@ -147,6 +147,7 @@ authRouter.post(
     // never reveals whether an account exists to an unauthenticated caller.
     if (user.mfa_enabled) {
       if (!code) {
+        markMfaChallengeIssued(res);
         throw new HttpError(401, "mfa_required");
       }
       if (
