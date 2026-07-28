@@ -1,6 +1,6 @@
 // Parts of this file were generated with AI assistance (Claude Code, Anthropic, 2026).
 // Prompts used: "write some very simple tests for passwordspage.tsx"
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { PasswordsPage } from './PasswordsPage';
 
@@ -12,6 +12,12 @@ function renderPasswordsPage(overrides = {}) {
     decryptVaultItem: vi.fn(),
     encryptVaultItem: vi.fn().mockResolvedValue('encrypted-blob'),
     createVaultItem: vi
+      .fn()
+      .mockResolvedValue({
+        data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
+        publicErrorMessage: '',
+      }),
+    updateVaultItem: vi
       .fn()
       .mockResolvedValue({
         data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
@@ -290,5 +296,58 @@ describe('PasswordsPage', () => {
     expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
 
     confirmSpy.mockRestore();
+  });
+
+  it('encrypts and saves changes when editing a password entry', async () => {
+    const props = renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Edit'));
+    const editForm = within(document.querySelector('.password-item form')!);
+    fireEvent.input(editForm.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
+    fireEvent.input(editForm.getByPlaceholderText('Username'), { target: { value: 'newuser' } });
+    fireEvent.input(editForm.getByPlaceholderText('Password'), { target: { value: 'new-secret' } });
+    fireEvent.click(editForm.getByText('Save'));
+
+    await waitFor(() =>
+      expect(props.encryptVaultItem).toHaveBeenCalledWith(
+        { siteName: 'New Site', username: 'newuser', password: 'new-secret' },
+        STUB_KEY,
+      ),
+    );
+    expect(props.updateVaultItem).toHaveBeenCalledWith('item-1', 'encrypted-blob');
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalledTimes(2));
+  });
+
+  it('shows an error message when saving an edited password entry fails', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+      updateVaultItem: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error updating password.' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Edit'));
+    const editForm = within(document.querySelector('.password-item form')!);
+    fireEvent.click(editForm.getByText('Save'));
+
+    expect(await screen.findByText('Error: Error updating password.')).toBeInTheDocument();
   });
 });

@@ -14,6 +14,7 @@ function renderPasswordItem(overrides = {}) {
   const props = {
     item,
     onDelete: vi.fn().mockResolvedValue(undefined),
+    onEdit: vi.fn().mockResolvedValue(''),
     ...overrides,
   };
 
@@ -86,5 +87,67 @@ describe('PasswordItem', () => {
     expect(props.onDelete).not.toHaveBeenCalled();
 
     confirmSpy.mockRestore();
+  });
+
+  it('shows an edit form pre-filled with the current values when Edit is clicked', () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+
+    expect(screen.getByPlaceholderText('Site name')).toHaveValue('Email');
+    expect(screen.getByPlaceholderText('Username')).toHaveValue('someone');
+    expect(screen.getByPlaceholderText('Password')).toHaveValue('super-secret');
+  });
+
+  it('calls onEdit with the updated fields when Save is clicked', async () => {
+    const props = renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.input(screen.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
+    fireEvent.input(screen.getByPlaceholderText('Username'), { target: { value: 'newuser' } });
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'new-secret' } });
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() =>
+      expect(props.onEdit).toHaveBeenCalledWith('item-1', {
+        siteName: 'New Site',
+        username: 'newuser',
+        password: 'new-secret',
+      }),
+    );
+  });
+
+  it('exits edit mode after a successful save', async () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Save'));
+
+    await waitFor(() => expect(screen.queryByPlaceholderText('Site name')).not.toBeInTheDocument());
+    expect(screen.getByText('Email')).toBeInTheDocument();
+  });
+
+  it('shows an error and stays in edit mode when saving fails', async () => {
+    const props = renderPasswordItem({
+      onEdit: vi.fn().mockResolvedValue('Error updating password.'),
+    });
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Save'));
+
+    expect(await screen.findByText('Error: Error updating password.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Site name')).toBeInTheDocument();
+    expect(props.onEdit).toHaveBeenCalled();
+  });
+
+  it('discards changes and exits edit mode when Cancel is clicked', () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.input(screen.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
+    fireEvent.click(screen.getByText('Cancel'));
+
+    expect(screen.queryByPlaceholderText('Site name')).not.toBeInTheDocument();
+    expect(screen.getByText('Email')).toBeInTheDocument();
   });
 });

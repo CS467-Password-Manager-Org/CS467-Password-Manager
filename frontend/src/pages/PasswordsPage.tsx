@@ -89,6 +89,7 @@ export function PasswordsPage({
   decryptVaultItem,
   encryptVaultItem,
   createVaultItem,
+  updateVaultItem,
   deleteVaultItem,
   encryptionKey,
   fetchMe,
@@ -98,6 +99,7 @@ export function PasswordsPage({
   decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
   encryptVaultItem: (item: VaultItemSecret, key: CryptoKey) => Promise<string>;
   createVaultItem: (encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
+  updateVaultItem: (id: string, encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
   deleteVaultItem: (id: string) => Promise<ServerResponse<null>>;
   encryptionKey: CryptoKey | undefined;
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
@@ -148,6 +150,29 @@ export function PasswordsPage({
     }
   };
 
+  const handleEdit = async (
+    id: string,
+    update: { siteName: string; username: string; password: string },
+  ): Promise<string> => {
+    if (!encryptionKey) {
+      return 'Error updating password.';
+    }
+
+    try {
+      const encryptedData = await encryptVaultItem(update, encryptionKey);
+      const { publicErrorMessage } = await updateVaultItem(id, encryptedData);
+      if (publicErrorMessage) {
+        return publicErrorMessage;
+      }
+
+      await loadPasswords(encryptionKey);
+      return '';
+    } catch (e) {
+      console.error(e);
+      return 'Error updating password.';
+    }
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       const { data } = await fetchMe();
@@ -185,7 +210,9 @@ export function PasswordsPage({
         {passwords &&
           !passwordsError &&
           passwords.length > 0 &&
-          passwords.map((p) => <PasswordItem item={p} onDelete={handleDelete} key={p.id} />)}
+          passwords.map((p) => (
+            <PasswordItem item={p} onDelete={handleDelete} onEdit={handleEdit} key={p.id} />
+          ))}
       </section>
 
       {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
