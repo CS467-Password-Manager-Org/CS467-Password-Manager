@@ -25,7 +25,7 @@ export function PasswordWarnings({
   }
 
   return (
-    <div className="password-warnings">
+    <div className="password-warnings" role="alert">
       {warnings.map((warning) => (
         <p key={warning}>⚠ {warning}</p>
       ))}

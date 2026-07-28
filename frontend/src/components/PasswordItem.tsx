@@ -95,13 +95,16 @@ export function PasswordItem({
             value={editUsername}
           />
           <input
-            type="password"
+            type={revealed ? 'text' : 'password'}
             placeholder="Password"
             onInput={(ev) => setEditPassword(ev.currentTarget.value)}
             value={editPassword}
           />
           <button type="button" onClick={() => setEditPassword(generateSuggestedPassword())}>
             Generate
+          </button>
+          <button type="button" onClick={() => setRevealed((prev) => !prev)}>
+            {revealed ? 'Hide' : 'Show'}
           </button>
           <button type="button" onClick={handleSaveEdit}>
             Save

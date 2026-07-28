@@ -22,6 +22,7 @@ function CreatePasswordForm({
   const [formUsername, setFormUsername] = useState('');
   const [formPassword, setFormPassword] = useState('');
   const [createError, setCreateError] = useState('');
+  const [revealed, setRevealed] = useState(false);
 
   const handleCreatePassword = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
@@ -70,13 +71,16 @@ function CreatePasswordForm({
           value={formUsername}
         />
         <input
-          type="password"
+          type={revealed ? 'text' : 'password'}
           placeholder="Password"
           onInput={(ev) => setFormPassword(ev.currentTarget.value)}
           value={formPassword}
         />
         <button type="button" onClick={() => setFormPassword(generateSuggestedPassword())}>
           Generate
+        </button>
+        <button type="button" onClick={() => setRevealed((prev) => !prev)}>
+          {revealed ? 'Hide' : 'Show'}
         </button>
         <button onClick={handleCreatePassword}>Save</button>
       </form>
