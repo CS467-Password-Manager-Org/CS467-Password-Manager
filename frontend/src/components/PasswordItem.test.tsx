@@ -13,6 +13,7 @@ beforeEach(() => {
 function renderPasswordItem(overrides = {}) {
   const props = {
     item,
+    existingPasswords: [],
     onDelete: vi.fn().mockResolvedValue(undefined),
     onEdit: vi.fn().mockResolvedValue(''),
     ...overrides,
@@ -149,5 +150,49 @@ describe('PasswordItem', () => {
 
     expect(screen.queryByPlaceholderText('Site name')).not.toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
+  });
+
+  it('fills in a generated password when Generate is clicked while editing', () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByText('Generate'));
+
+    const passwordInput = screen.getByPlaceholderText('Password') as HTMLInputElement;
+    expect(passwordInput.value).not.toBe('');
+    expect(passwordInput.value).not.toBe('super-secret');
+    expect(passwordInput.value.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('warns when the edited password is a known common password', () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'password' } });
+
+    expect(screen.getByText(/very common/)).toBeInTheDocument();
+  });
+
+  it('warns when the edited password matches another vault entry', () => {
+    renderPasswordItem({
+      existingPasswords: [{ siteName: 'Bank', username: 'someone', password: 'shared-secret' }],
+    });
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'shared-secret' } });
+
+    expect(screen.getByText(/already used for another vault entry/)).toBeInTheDocument();
+  });
+
+  it('does not warn about a password that is neither common nor reused', () => {
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.input(screen.getByPlaceholderText('Password'), {
+      target: { value: 'Xy9$qzL2!vRt8w' },
+    });
+
+    expect(screen.queryByText(/very common/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/already used for another vault entry/)).not.toBeInTheDocument();
   });
 });

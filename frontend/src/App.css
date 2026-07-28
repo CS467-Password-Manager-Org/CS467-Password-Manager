@@ -17,3 +17,13 @@
   border: 1px solid black;
   padding: 1em;
 }
+
+.password-warnings {
+  color: #b00020;
+  font-size: 0.9em;
+  text-align: left;
+}
+
+.password-warnings p {
+  margin: 0.25em 0;
+}

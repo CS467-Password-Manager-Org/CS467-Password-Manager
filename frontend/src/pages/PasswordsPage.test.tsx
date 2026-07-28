@@ -228,6 +228,47 @@ describe('PasswordsPage', () => {
     expect(await screen.findByText('Error: Error saving password.')).toBeInTheDocument();
   });
 
+  it('fills in a generated password when Generate is clicked on the create form', async () => {
+    const props = renderPasswordsPage();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fireEvent.click(screen.getByText('Generate'));
+
+    const passwordInput = screen.getByPlaceholderText('Password') as HTMLInputElement;
+    expect(passwordInput.value).not.toBe('');
+    expect(passwordInput.value.length).toBeGreaterThanOrEqual(12);
+  });
+
+  it('warns when the new password is a known common password', async () => {
+    const props = renderPasswordsPage();
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+
+    fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'password' } });
+
+    expect(screen.getByText(/very common/)).toBeInTheDocument();
+  });
+
+  it('warns when the new password matches an existing vault entry', async () => {
+    const props = renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'shared-secret' }),
+    });
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    const createSection = within(screen.getByText('Create New Password Entry').closest('section')!);
+    fireEvent.input(createSection.getByPlaceholderText('Password'), {
+      target: { value: 'shared-secret' },
+    });
+
+    expect(screen.getByText(/already used for another vault entry/)).toBeInTheDocument();
+  });
+
   it('deletes a password entry and reloads the list when confirmed', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const props = renderPasswordsPage({
