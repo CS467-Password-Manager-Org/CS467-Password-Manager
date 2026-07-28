@@ -51,11 +51,12 @@ export function PasswordItem({
   const handleSaveEdit = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
 
+    setEditError('');
+
     if (!editSiteName || !editUsername || !editPassword) {
+      setEditError('All fields are required.');
       return;
     }
-
-    setEditError('');
 
     const errorMessage = await onEdit(item.id, {
       siteName: editSiteName,
@@ -93,7 +94,9 @@ export function PasswordItem({
             onInput={(ev) => setEditPassword(ev.currentTarget.value)}
             value={editPassword}
           />
-          <button onClick={handleSaveEdit}>Save</button>
+          <button type="button" onClick={handleSaveEdit}>
+            Save
+          </button>
           <button type="button" onClick={cancelEditing}>
             Cancel
           </button>
