@@ -2,9 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import type { MeResponse, VaultItem } from '@app/shared';
 import type { VaultItemSecret } from '@app/crypto';
-import { PasswordItem } from '../components/PasswordItem';
-
-export type Password = VaultItemSecret;
+import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
 
 function CreatePasswordForm({
   encryptVaultItem,
@@ -91,6 +89,7 @@ export function PasswordsPage({
   decryptVaultItem,
   encryptVaultItem,
   createVaultItem,
+  deleteVaultItem,
   encryptionKey,
   fetchMe,
   redirect,
@@ -99,12 +98,14 @@ export function PasswordsPage({
   decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
   encryptVaultItem: (item: VaultItemSecret, key: CryptoKey) => Promise<string>;
   createVaultItem: (encryptedData: string) => Promise<ServerResponse<VaultItem | null>>;
+  deleteVaultItem: (id: string) => Promise<ServerResponse<null>>;
   encryptionKey: CryptoKey | undefined;
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
   redirect: (route: string) => void;
 }) {
-  const [passwords, setPasswords] = useState<Password[] | null>(null);
+  const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
   const [passwordsError, setPasswordsError] = useState('');
+  const [deleteError, setDeleteError] = useState('');
   const [userEmail, setUserEmail] = useState('');
 
   const loadPasswords = async (key: CryptoKey) => {
@@ -124,11 +125,26 @@ export function PasswordsPage({
       const passwords = await Promise.all(
         vaultItems.map(async (item) => ({
           ...(await decryptVaultItem(item.encryptedData, key)),
+          id: item.id,
         })),
       );
+      setPasswordsError('');
       setPasswords(passwords);
     } catch {
       setPasswordsError('Unable to load your passwords.');
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleteError('');
+    const { publicErrorMessage } = await deleteVaultItem(id);
+    if (publicErrorMessage) {
+      setDeleteError(publicErrorMessage);
+      return;
+    }
+
+    if (encryptionKey) {
+      await loadPasswords(encryptionKey);
     }
   };
 
@@ -160,10 +176,16 @@ export function PasswordsPage({
           </section>
         )}
 
+        {deleteError && (
+          <section>
+            <h2>Error: {deleteError}</h2>
+          </section>
+        )}
+
         {passwords &&
           !passwordsError &&
           passwords.length > 0 &&
-          passwords.map((p, i) => <PasswordItem password={p} key={i} />)}
+          passwords.map((p) => <PasswordItem item={p} onDelete={handleDelete} key={p.id} />)}
       </section>
 
       {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
