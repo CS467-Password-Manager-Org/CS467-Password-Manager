@@ -1,5 +1,5 @@
 import { createHmac } from "node:crypto";
-import type { Request } from "express";
+import type { Request, Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { config } from "../config.js";
 
@@ -54,6 +54,14 @@ export const authLimiter = rateLimit({
   message: RATE_LIMITED_BODY,
 });
 
+const MFA_CHALLENGE_ISSUED = "mfa_challenge_issued";
+
+// Marks the 401 that only a correct password can produce, so it is not miscounted
+// as a guess. Set by the route rather than inferred from the absence of a code.
+export function markMfaChallengeIssued(res: Response): void {
+  res.locals.accountVerifyOutcome = MFA_CHALLENGE_ISSUED;
+}
+
 // Layer 1: failed verifications per account, IP-independent, so rotating IPs cannot
 // walk past it (OWASP). Only failures count; a 429 is backoff, never a lockout.
 export const accountVerifyLimiter = rateLimit({
@@ -63,11 +71,17 @@ export const accountVerifyLimiter = rateLimit({
   legacyHeaders: false,
   message: RATE_LIMITED_BODY,
   skipSuccessfulRequests: true,
+  // An MFA challenge proves the password was right, so it is not a failed attempt
+  // and must not spend a budget meant for guesses. Wrong codes still count.
+  requestWasSuccessful: (_req, res) =>
+    res.statusCode < 400 ||
+    (res.statusCode === 401 && res.locals.accountVerifyOutcome === MFA_CHALLENGE_ISSUED),
   keyGenerator: accountVerifyKey,
 });
 
 // Layer 2: failures per IP across all accounts, catching a horizontal spray. Kept
-// separate because a composite account+IP key would reset per rotated IP.
+// separate because a composite account+IP key would reset per rotated IP. Counts the
+// MFA challenge, so repeating it still costs the source even though the account pays nothing.
 export const ipVerifyLimiter = rateLimit({
   windowMs: config.AUTH_VERIFY_RATE_LIMIT_WINDOW_MS,
   limit: config.AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP,
