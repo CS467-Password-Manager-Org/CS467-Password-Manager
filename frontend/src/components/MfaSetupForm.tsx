@@ -44,7 +44,8 @@ export function MfaSetupForm({
   const handleActivate = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
 
-    if (!code) {
+    if (!/^[0-9]{6}$/.test(code)) {
+      setActivateError('Please enter the 6-digit code from your authenticator app.');
       return;
     }
 
@@ -100,6 +101,7 @@ export function MfaSetupForm({
           type="text"
           inputMode="numeric"
           maxLength={6}
+          autoComplete="one-time-code"
           placeholder="6-digit code"
           onInput={(ev) => setCode(ev.currentTarget.value)}
           value={code}

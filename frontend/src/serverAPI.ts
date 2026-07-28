@@ -22,6 +22,14 @@ export type ServerResponse<T> = {
 
 const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
 
+function rateLimitMessage(response: Response): string {
+  const retryAfter = Number(response.headers.get('Retry-After'));
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return `Too many attempts. Please try again in ${retryAfter}s.`;
+  }
+  return 'Too many attempts. Please try again later.';
+}
+
 const DEFAULT_LOGIN_ERROR = 'Error logging in.';
 
 export async function fetchUserSalt(email: string): Promise<ServerResponse<SaltResponse | null>> {
@@ -160,6 +168,8 @@ export async function login(email: string, authKey: string, code?: string): Prom
 
       if (response.status >= 500 && response.status < 600) {
         publicMessage = DEFAULT_SERVER_ERROR;
+      } else if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
       } else if (response.status === 401) {
         const errorBody = await response.json().catch(() => null);
         if (errorBody?.error === 'mfa_required') {
@@ -487,9 +497,15 @@ export async function enrollMfa(): Promise<ServerResponse<MfaEnrollResponse | nu
 
     if (!response.ok) {
       console.error(response);
+
+      let publicMessage = DEFAULT_MFA_ENROLL_ERROR;
+      if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
+      }
+
       return {
         data: null,
-        publicErrorMessage: DEFAULT_MFA_ENROLL_ERROR,
+        publicErrorMessage: publicMessage,
       };
     }
 
@@ -543,11 +559,11 @@ export async function activateMfa(code: string): Promise<ServerResponse<MfaStatu
     if (!response.ok) {
       let publicMessage = DEFAULT_MFA_ACTIVATE_ERROR;
 
-      if (response.status === 401) {
-        const errorBody = await response.json().catch(() => null);
-        if (errorBody?.error === 'invalid_mfa_code') {
-          publicMessage = 'Incorrect code. Please try again.';
-        }
+      const errorBody = await response.json().catch(() => null);
+      if (errorBody?.error === 'invalid_mfa_code') {
+        publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
       } else if (response.status >= 500 && response.status < 600) {
         publicMessage = DEFAULT_SERVER_ERROR;
       }
