@@ -1,8 +1,18 @@
 // Parts of this file were generated with AI assistance (Claude Code, Anthropic, 2026).
 // Prompts used: "write some very simple tests for passwordspage.tsx"
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PasswordsPage } from './PasswordsPage';
+import { clearEncryptionKey } from '../keyStore';
+
+// jsdom has no IndexedDB, so the real key store would silently no-op. Mock it to
+// assert on the calls instead — what matters here is when the key is discarded,
+// not how it is stored.
+vi.mock('../keyStore', () => ({
+  clearEncryptionKey: vi.fn().mockResolvedValue(undefined),
+  loadEncryptionKey: vi.fn().mockResolvedValue(null),
+  saveEncryptionKey: vi.fn().mockResolvedValue(undefined),
+}));
 
 const STUB_KEY = {} as CryptoKey;
 
@@ -412,5 +422,44 @@ describe('PasswordsPage', () => {
     fireEvent.click(editForm.getByText('Save'));
 
     expect(await screen.findByText('Error: Error updating password.')).toBeInTheDocument();
+  });
+});
+
+describe('PasswordsPage session and vault key handling', () => {
+  beforeEach(() => {
+    vi.mocked(clearEncryptionKey).mockClear();
+  });
+
+  it('stays on the page after a reload when the stored key was restored', async () => {
+    // A reload clears React state, but the encryption key is read back from
+    // IndexedDB before this page mounts, so the user should not be bounced.
+    const props = renderPasswordsPage();
+
+    await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
+    expect(props.redirect).not.toHaveBeenCalled();
+    expect(clearEncryptionKey).not.toHaveBeenCalled();
+  });
+
+  it('clears the stored key and redirects when the session is no longer valid', async () => {
+    // fetchMe returning no user means the token is missing, expired, or revoked.
+    // The key must not outlive the session that justified holding it.
+    const props = renderPasswordsPage({
+      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'nope' }),
+    });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+    expect(clearEncryptionKey).toHaveBeenCalled();
+    expect(props.fetchVaultItems).not.toHaveBeenCalled();
+  });
+
+  it('redirects without clearing when the session is valid but no key is available', async () => {
+    // Reached when IndexedDB is unavailable, so the key could not survive the
+    // reload. There is nothing stored to clear; the user re-derives it by
+    // signing in again.
+    const props = renderPasswordsPage({ encryptionKey: undefined });
+
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+    expect(clearEncryptionKey).not.toHaveBeenCalled();
+    expect(props.fetchVaultItems).not.toHaveBeenCalled();
   });
 });

@@ -5,6 +5,7 @@ import { MfaSetupForm } from '../components/MfaSetupForm';
 import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from '@app/shared';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
+import { clearEncryptionKey } from '../keyStore';
 
 function CreatePasswordForm({
   encryptVaultItem,
@@ -198,7 +199,19 @@ export function PasswordsPage({
       setUserEmail(email);
       setMfaEnabled(data?.mfaEnabled ?? false);
 
-      if (!email || !encryptionKey) {
+      // No valid session: the token is missing, expired, or was revoked. Drop the
+      // stored encryption key as well, so it never outlives the session that
+      // justified holding it, then send the user to sign in again.
+      if (!email) {
+        await clearEncryptionKey();
+        redirect('/login');
+        return;
+      }
+
+      // Session is valid but the vault key is unavailable — for example when
+      // IndexedDB is blocked, so the key could not survive the reload. Signing in
+      // again is the only way to re-derive it from the master password.
+      if (!encryptionKey) {
         redirect('/login');
         return;
       }
