@@ -419,4 +419,3 @@ docker compose down -v     # stop and wipe the database
 
 - [`api.md`](./api.md) — full endpoint contract, error shapes, and database schema
 - [`threat-model.md`](./threat-model.md) — why these controls exist and what they defend against
-- [`vault.http`](./vault.http) — the same vault flows as a VS Code REST Client collection
