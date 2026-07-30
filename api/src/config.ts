@@ -1,12 +1,33 @@
 const { JWT_SECRET, SALT_PEPPER } = process.env;
 
-// Fail fast at startup if a required secret is missing, mirroring db.ts.
-if (!JWT_SECRET) {
-  throw new Error("JWT_SECRET is not set");
+// Compose used to supply these as fallbacks, which meant the variable was never
+// unset inside the container and a bare "is not set" check could never fire.
+// The values are therefore rejected by name, not only by absence.
+const REJECTED_SECRETS = new Set([
+  "dev-only-insecure-secret-change-me",
+  "dev-only-insecure-pepper-change-me",
+  "changeme",
+  "change-me",
+  "secret",
+  "password",
+]);
+
+function requireSecret(name: string, value: string | undefined): string {
+  if (!value) {
+    throw new Error(`${name} is not set. Run ./scripts/setup.sh to generate .env`);
+  }
+  // A length floor alone is not enough: both shipped defaults are 34 characters,
+  // so any plausible minimum would pass them. The deny-list is the real gate.
+  if (REJECTED_SECRETS.has(value.trim().toLowerCase())) {
+    throw new Error(
+      `${name} is set to a known default value. Run ./scripts/setup.sh to generate a strong secret.`,
+    );
+  }
+  return value;
 }
-if (!SALT_PEPPER) {
-  throw new Error("SALT_PEPPER is not set");
-}
+
+const jwtSecret = requireSecret("JWT_SECRET", JWT_SECRET);
+const saltPepper = requireSecret("SALT_PEPPER", SALT_PEPPER);
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
@@ -16,8 +37,10 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
 // JWT lifetime is kept as a number of seconds so it satisfies jsonwebtoken's
 // stricter expiresIn typing without a duration string.
 export const config = Object.freeze({
-  JWT_SECRET,
-  SALT_PEPPER,
+  // Property names are deliberately unchanged: lib/jwt.ts, routes/auth.ts and
+  // middleware/rate-limit.ts read these by name and need no edits.
+  JWT_SECRET: jwtSecret,
+  SALT_PEPPER: saltPepper,
   JWT_EXPIRES_IN_SECONDS: parsePositiveInt(process.env.JWT_EXPIRES_IN_SECONDS, 900),
   PORT: parsePositiveInt(process.env.PORT, 5000),
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
