@@ -35,6 +35,33 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The committed lockfile was generated on macOS. npm records optional
+      # platform binaries only for the host that generated the lockfile, so
+      # this one contains just the darwin-arm64 builds of rolldown and
+      # esbuild — rolldown declares 15 platform bindings and the lockfile has
+      # 1. On Linux the frontend build then fails with
+      #   Cannot find module '../rolldown-binding.linux-x64-gnu.node'
+      # because the binding ships as a separate @rolldown/binding-<platform>
+      # package that was never recorded.
+      #
+      # Install the Linux binaries explicitly, pinned to the versions the
+      # lockfile already resolved for their parent packages, and with
+      # --no-save --no-package-lock so neither package.json nor the lockfile
+      # is modified. Everything else still comes from `npm ci`.
+      #
+      # This is a workaround for a real defect in the committed lockfile, not
+      # a property of CI. Remove it once the lockfile carries all platforms.
+      # Tracked in #100.
+      - name: Install Linux build binaries absent from the lockfile
+        run: |
+          ROLLDOWN=$(node -p "require('rolldown/package.json').version")
+          ESBUILD=$(node -p "require('esbuild/package.json').version")
+          echo "rolldown=$ROLLDOWN esbuild=$ESBUILD"
+          npm install --no-save --no-package-lock \
+            "@rolldown/binding-linux-x64-gnu@${ROLLDOWN}" \
+            "@esbuild/linux-x64@${ESBUILD}"
+          git diff --exit-code package-lock.json package.json
+
       - name: Verify Docker is available
         run: docker info > /dev/null
 
