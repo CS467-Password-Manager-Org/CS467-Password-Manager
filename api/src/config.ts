@@ -34,6 +34,18 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+// Number of reverse proxies in front of this API. Zero means trust nobody, which
+// is the safe default: if the app trusts a forwarded header that no proxy
+// actually set, a client can spoof X-Forwarded-For and hand itself a fresh
+// rate-limit bucket per request. Set it to the real hop count when deploying
+// behind a proxy — otherwise every user shares one bucket, because the API only
+// ever sees the proxy's address. Deliberately allows 0, so it does not reuse
+// parsePositiveInt.
+function parseTrustProxyHops(value: string | undefined): number {
+  const parsed = Number.parseInt(value ?? "", 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+}
+
 // JWT lifetime is kept as a number of seconds so it satisfies jsonwebtoken's
 // stricter expiresIn typing without a duration string.
 export const config = Object.freeze({
@@ -43,6 +55,7 @@ export const config = Object.freeze({
   SALT_PEPPER: saltPepper,
   JWT_EXPIRES_IN_SECONDS: parsePositiveInt(process.env.JWT_EXPIRES_IN_SECONDS, 900),
   PORT: parsePositiveInt(process.env.PORT, 5000),
+  TRUST_PROXY_HOPS: parseTrustProxyHops(process.env.TRUST_PROXY_HOPS),
   FRONTEND_ORIGIN: process.env.FRONTEND_ORIGIN ?? "http://localhost:5173",
   AUTH_RATE_LIMIT_WINDOW_MS: parsePositiveInt(process.env.AUTH_RATE_LIMIT_WINDOW_MS, 900000),
   AUTH_RATE_LIMIT_MAX: parsePositiveInt(process.env.AUTH_RATE_LIMIT_MAX, 100),

@@ -55,14 +55,18 @@ describe('App vault key hydration on reload', () => {
 
     render(<App />);
 
-    expect(await screen.findByText('Passwords')).toBeInTheDocument();
+    // Assert on text unique to the loaded vault rather than the heading, which
+    // the loading placeholder also renders — waiting on a shared string can
+    // resolve against the placeholder and race the transition.
+    expect(await screen.findByText(/Logged in as/)).toBeInTheDocument();
     await waitFor(() => expect(fetchVaultItems).toHaveBeenCalled());
     expect(window.location.pathname).toBe('/passwords');
   });
 
-  it('does not render the vault before the stored key has been read', async () => {
+  it('shows a placeholder, not the vault, until the stored key has been read', async () => {
     // Rendering PasswordsPage while the read is still in flight would look
     // identical to "no key" and redirect, which is exactly the original defect.
+    // Rendering nothing at all leaves a blank screen, so a placeholder stands in.
     let resolveKey: (key: CryptoKey | null) => void = () => {};
     vi.mocked(loadEncryptionKey).mockReturnValue(
       new Promise<CryptoKey | null>((resolve) => {
@@ -73,12 +77,14 @@ describe('App vault key hydration on reload', () => {
 
     render(<App />);
 
-    // Still loading: nothing rendered, and crucially no redirect has happened.
-    expect(screen.queryByText('Passwords')).not.toBeInTheDocument();
+    // Placeholder is up, the vault has not loaded, and crucially no redirect.
+    expect(screen.getByText('Unlocking your vault…')).toBeInTheDocument();
+    expect(fetchVaultItems).not.toHaveBeenCalled();
     expect(window.location.pathname).toBe('/passwords');
 
     resolveKey({} as CryptoKey);
-    expect(await screen.findByText('Passwords')).toBeInTheDocument();
+    await waitFor(() => expect(fetchVaultItems).toHaveBeenCalled());
+    expect(screen.queryByText('Unlocking your vault…')).not.toBeInTheDocument();
   });
 
   it('sends the user to /login when there is no stored key to restore', async () => {

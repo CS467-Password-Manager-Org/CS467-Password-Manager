@@ -99,8 +99,16 @@ function Routes() {
     case '/passwords':
       // Hold the route until the stored key has been read, otherwise the page
       // mounts with no key and immediately redirects to /login on every reload.
+      // Render a placeholder rather than null: returning nothing leaves a blank
+      // screen for as long as the read takes, which on a slow device reads as a
+      // broken page.
       if (!keyHydrated) {
-        return null;
+        return (
+          <div>
+            <h2>Passwords</h2>
+            <p>Unlocking your vault…</p>
+          </div>
+        );
       }
       return (
         <PasswordsPage

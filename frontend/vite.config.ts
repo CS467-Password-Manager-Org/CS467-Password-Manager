@@ -12,6 +12,11 @@ export default defineConfig({
       '/api': {
         target: 'http://api:5000',
         changeOrigin: true,
+        // Forward the real client address. Without it the API sees only this dev
+        // server's address, so every browser session shares one rate-limit
+        // bucket and a few page reloads can throttle the whole team. Pair with
+        // TRUST_PROXY_HOPS=1 on the API, which is set in docker-compose.dev.yml.
+        xfwd: true,
       },
     },
   },
