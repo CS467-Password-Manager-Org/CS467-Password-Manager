@@ -34,6 +34,7 @@ The API is Node.js + Express + TypeScript over PostgreSQL, served at `http://loc
 It is zero-knowledge by construction: the master password and the master key never leave the browser, so the server only ever receives a client-derived auth key (which it stores as an Argon2id hash) and opaque ciphertext blobs. No column in the database holds a plaintext credential or any key that could decrypt a vault.
 
 - **[docs/api.md](docs/api.md)** — full endpoint reference, error contract, and database schema
+- **[docs/threat-model.md](docs/threat-model.md)** — assets, threats, mitigations, and explicit non-goals
 - **[docs/api-testing.md](docs/api-testing.md)** — manual curl runbook for testing the API locally
 
 ## Testing

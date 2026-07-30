@@ -211,3 +211,4 @@ This is the project's core value, and it is a property of the schema and the req
 |---|---|
 | [`api-testing.md`](./api-testing.md) | Ordered curl walkthroughs against a running stack |
 | [`vault.http`](./vault.http) | The same flows as a VS Code REST Client collection |
+| [`threat-model.md`](./threat-model.md) | Assets, threats, mitigations, and explicit non-goals |
