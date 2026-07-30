@@ -449,7 +449,13 @@ describe('PasswordsPage session and vault key handling', () => {
 
     await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
     expect(clearEncryptionKey).toHaveBeenCalled();
-    expect(props.fetchVaultItems).not.toHaveBeenCalled();
+
+    // The items request is issued alongside /me rather than after it, so on this
+    // path one request goes out before the session turns out to be invalid. That
+    // is deliberate: it saves a round-trip on every successful load, and the
+    // wasted call is a harmless 401 the server rejects on its own. What matters
+    // is that nothing decrypted is shown, which the redirect above guarantees.
+    expect(screen.queryByText('Site')).not.toBeInTheDocument();
   });
 
   it('redirects without clearing when the session is valid but no key is available', async () => {
@@ -461,5 +467,56 @@ describe('PasswordsPage session and vault key handling', () => {
     await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
     expect(clearEncryptionKey).not.toHaveBeenCalled();
     expect(props.fetchVaultItems).not.toHaveBeenCalled();
+  });
+});
+
+describe('PasswordsPage initial load behaviour', () => {
+  it('requests the account and the vault together rather than one after the other', async () => {
+    // Serialising these cost a full round-trip on every load, which is what made
+    // the vault appear noticeably later than the rest of the page. Assert both
+    // are in flight before either resolves, so a future refactor cannot quietly
+    // reintroduce the waterfall.
+    let releaseMe: (v: unknown) => void = () => {};
+    const mePending = new Promise((resolve) => {
+      releaseMe = resolve;
+    });
+
+    const fetchVaultItems = vi.fn().mockResolvedValue({ data: [], publicErrorMessage: '' });
+    const fetchMe = vi.fn().mockReturnValue(mePending);
+
+    renderPasswordsPage({ fetchMe, fetchVaultItems });
+
+    // /me has not answered yet, but the vault request has already gone out.
+    await waitFor(() => expect(fetchVaultItems).toHaveBeenCalled());
+    expect(fetchMe).toHaveBeenCalled();
+
+    releaseMe({
+      data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false },
+      publicErrorMessage: '',
+    });
+  });
+
+  it('does not claim MFA is off before the account has loaded', async () => {
+    // mfaEnabled used to default to false, so a user who has MFA enabled was
+    // briefly shown a "Set up MFA" form telling them their account was
+    // unprotected. Showing nothing is correct until the real state is known.
+    let releaseMe: (v: unknown) => void = () => {};
+    const mePending = new Promise((resolve) => {
+      releaseMe = resolve;
+    });
+
+    renderPasswordsPage({ fetchMe: vi.fn().mockReturnValue(mePending) });
+
+    expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
+    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+
+    releaseMe({
+      data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
+      publicErrorMessage: '',
+    });
+
+    // Once known, the true state appears — and it is the enabled one.
+    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 });
