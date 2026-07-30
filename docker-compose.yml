@@ -59,5 +59,4 @@ services:
 
 volumes:
   db-data:
-  api-node-modules-v2:
   frontend-node-modules-v2:
