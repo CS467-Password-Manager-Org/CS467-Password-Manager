@@ -22,45 +22,50 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           # Matches node:22-slim in api/Dockerfile and frontend/Dockerfile.
           node-version: 22
           cache: npm
 
+      # The committed lockfile records optional platform binaries only for the
+      # host that generated it (npm/cli#4828), so a lockfile written on macOS
+      # would omit the Linux builds and break `npm ci` here. The root
+      # package.json pins those Linux binaries as explicit optionalDependencies
+      # to force them into the lockfile on every platform. That only holds if
+      # each stays on the same version as its darwin counterpart, so assert it
+      # rather than discovering the drift as a confusing build failure.
+      - name: Assert Linux binaries match their darwin counterparts
+        run: |
+          node -e '
+            const lock = require("./package-lock.json");
+            const opt = require("./package.json").optionalDependencies || {};
+            const pairs = {
+              "@rolldown/binding-linux-x64-gnu": "@rolldown/binding-darwin-arm64",
+              "@esbuild/linux-x64": "@esbuild/darwin-arm64",
+              "lightningcss-linux-x64-gnu": "lightningcss-darwin-arm64",
+              "@oxlint/binding-linux-x64-gnu": "@oxlint/binding-darwin-arm64",
+            };
+            let bad = 0;
+            for (const [linux, darwin] of Object.entries(pairs)) {
+              const want = (lock.packages["node_modules/" + darwin] || {}).version;
+              const have = opt[linux];
+              if (!want) { console.error(`${darwin} is not in the lockfile`); bad++; continue; }
+              if (have !== want) {
+                console.error(`${linux} is pinned to ${have} but ${darwin} resolves to ${want} — update optionalDependencies in package.json`);
+                bad++;
+              }
+            }
+            if (!bad) console.log("all Linux binaries match their darwin counterparts");
+            process.exit(bad ? 1 : 0);
+          '
+
       # ci, not install: the lockfile is the contract. A build that silently
       # floats transitive versions is exactly what this repo cannot afford.
       - name: Install dependencies
         run: npm ci
-
-      # The committed lockfile was generated on macOS. npm records optional
-      # platform binaries only for the host that generated the lockfile, so
-      # this one contains just the darwin-arm64 builds of rolldown and
-      # esbuild — rolldown declares 15 platform bindings and the lockfile has
-      # 1. On Linux the frontend build then fails with
-      #   Cannot find module '../rolldown-binding.linux-x64-gnu.node'
-      # because the binding ships as a separate @rolldown/binding-<platform>
-      # package that was never recorded.
-      #
-      # Install the Linux binaries explicitly, pinned to the versions the
-      # lockfile already resolved for their parent packages, and with
-      # --no-save --no-package-lock so neither package.json nor the lockfile
-      # is modified. Everything else still comes from `npm ci`.
-      #
-      # This is a workaround for a real defect in the committed lockfile, not
-      # a property of CI. Remove it once the lockfile carries all platforms.
-      # Tracked in #100.
-      - name: Install Linux build binaries absent from the lockfile
-        run: |
-          ROLLDOWN=$(node -p "require('rolldown/package.json').version")
-          ESBUILD=$(node -p "require('esbuild/package.json').version")
-          echo "rolldown=$ROLLDOWN esbuild=$ESBUILD"
-          npm install --no-save --no-package-lock \
-            "@rolldown/binding-linux-x64-gnu@${ROLLDOWN}" \
-            "@esbuild/linux-x64@${ESBUILD}"
-          git diff --exit-code package-lock.json package.json
 
       - name: Verify Docker is available
         run: docker info > /dev/null
@@ -90,9 +95,9 @@ jobs:
     name: Production dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
