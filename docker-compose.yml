@@ -2,16 +2,16 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
-      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:?missing in .env — run ./scripts/setup.sh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?missing in .env — run ./scripts/setup.sh}
+      POSTGRES_DB: ${POSTGRES_DB:?missing in .env — run ./scripts/setup.sh}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./db/init:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -20,10 +20,11 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+      target: prod          # OPS-03: a plain `docker compose up` is production
     environment:
-      DATABASE_URL: postgresql://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}
-      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-me}
-      SALT_PEPPER: ${SALT_PEPPER:-dev-only-insecure-pepper-change-me}
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      JWT_SECRET: ${JWT_SECRET:?missing in .env — run ./scripts/setup.sh}
+      SALT_PEPPER: ${SALT_PEPPER:?missing in .env — run ./scripts/setup.sh}
       JWT_EXPIRES_IN_SECONDS: ${JWT_EXPIRES_IN_SECONDS:-900}
       FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
       AUTH_RATE_LIMIT_WINDOW_MS: ${AUTH_RATE_LIMIT_WINDOW_MS:-900000}
@@ -33,10 +34,11 @@ services:
       AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP: ${AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP:-30}
     ports:
       - "${API_PORT:-5001}:5000"
-    volumes:
-      - ./api:/app/api
-      - ./packages/shared:/app/packages/shared
-      - api-node-modules-v2:/app/node_modules
+    # No volumes: the prod image is self-contained. Mounting source or a
+    # node_modules volume here would shadow the built image — a pre-existing
+    # volume from the old dev-only image would mount straight over the new
+    # image's dependencies, producing either a module-not-found crash or a
+    # silently stale container that makes OPS-03 appear to pass.
     depends_on:
       db:
         condition: service_healthy
@@ -57,5 +59,4 @@ services:
 
 volumes:
   db-data:
-  api-node-modules-v2:
   frontend-node-modules-v2:

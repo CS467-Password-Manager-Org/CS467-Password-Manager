@@ -1,0 +1,113 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel superseded runs on the same ref rather than paying for both.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test
+    # ubuntu-latest ships a running Docker daemon, which the api suite requires:
+    # its Vitest global setup starts a real Postgres via Testcontainers.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Matches node:22-slim in api/Dockerfile and frontend/Dockerfile.
+          node-version: 22
+          cache: npm
+
+      # The committed lockfile records optional platform binaries only for the
+      # host that generated it (npm/cli#4828), so a lockfile written on macOS
+      # would omit the Linux builds and break `npm ci` here. The root
+      # package.json pins those Linux binaries as explicit optionalDependencies
+      # to force them into the lockfile on every platform. That only holds if
+      # each stays on the same version as its darwin counterpart, so assert it
+      # rather than discovering the drift as a confusing build failure.
+      - name: Assert Linux binaries match their darwin counterparts
+        run: |
+          node -e '
+            const lock = require("./package-lock.json");
+            const opt = require("./package.json").optionalDependencies || {};
+            const pairs = {
+              "@rolldown/binding-linux-x64-gnu": "@rolldown/binding-darwin-arm64",
+              "@esbuild/linux-x64": "@esbuild/darwin-arm64",
+              "lightningcss-linux-x64-gnu": "lightningcss-darwin-arm64",
+              "@oxlint/binding-linux-x64-gnu": "@oxlint/binding-darwin-arm64",
+            };
+            let bad = 0;
+            for (const [linux, darwin] of Object.entries(pairs)) {
+              const want = (lock.packages["node_modules/" + darwin] || {}).version;
+              const have = opt[linux];
+              if (!want) { console.error(`${darwin} is not in the lockfile`); bad++; continue; }
+              if (have !== want) {
+                console.error(`${linux} is pinned to ${have} but ${darwin} resolves to ${want} — update optionalDependencies in package.json`);
+                bad++;
+              }
+            }
+            if (!bad) console.log("all Linux binaries match their darwin counterparts");
+            process.exit(bad ? 1 : 0);
+          '
+
+      # ci, not install: the lockfile is the contract. A build that silently
+      # floats transitive versions is exactly what this repo cannot afford.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Docker is available
+        run: docker info > /dev/null
+
+      - name: Build all workspaces
+        run: |
+          npm run build --workspace=api
+          npm run build --workspace=frontend
+
+      # NO_COLOR: Vitest emits ANSI escapes even when not attached to a TTY,
+      # which makes failure output far harder to read in Actions logs.
+      - name: Run tests
+        env:
+          NO_COLOR: "1"
+        run: npm run test --workspaces --if-present
+
+      # --workspaces --if-present silently skips a workspace that has no test
+      # script, so a dropped script would look like a pass. Assert the two
+      # workspaces that must always have one still do.
+      - name: Assert test scripts still exist
+        run: |
+          npm pkg get scripts.test --workspace=api | grep -q 'vitest'
+          npm pkg get scripts.test --workspace=frontend | grep -q 'vitest'
+          npm pkg get scripts.test --workspace=packages/crypto | grep -q 'vitest'
+
+  audit:
+    name: Production dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      # Only production dependencies gate the build. The known high-severity
+      # advisories in this tree are dev-only (Testcontainers -> archiver ->
+      # glob -> minimatch) and are pruned from the runtime image by
+      # `npm ci --omit=dev` in api/Dockerfile, so failing on them would block
+      # every PR for a vulnerability that never ships.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high

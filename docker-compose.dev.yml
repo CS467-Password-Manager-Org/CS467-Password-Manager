@@ -1,0 +1,23 @@
+# Opt in with:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+#
+# This file must NOT be renamed to docker-compose.override.yml — Compose
+# auto-merges that filename on a plain `up`, which would silently make the
+# default path dev-with-watchers and break OPS-03 with no visible error and
+# no failing command. The same applies to docker-compose.override.yaml,
+# compose.override.yml and compose.override.yaml.
+services:
+  api:
+    build:
+      target: dev
+    volumes:
+      - ./api:/app/api
+      - ./packages/shared:/app/packages/shared
+      # Renamed from api-node-modules-v2 so a pre-existing volume from the old
+      # dev-only image can never mount over the new image's node_modules.
+      # Renaming makes the stale volume unreachable by name, which is more
+      # reliable than documenting a `down -v` step and hoping everyone runs it.
+      - api-node-modules-v3:/app/node_modules
+
+volumes:
+  api-node-modules-v3:

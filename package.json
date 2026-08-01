@@ -6,5 +6,12 @@
     "packages/*",
     "api",
     "frontend"
-  ]
+  ],
+  "//": "optionalDependencies below are a deliberate workaround, not real dependencies of this package. npm running on macOS records optional platform binaries only for the host it runs on (npm/cli#4828), so a lockfile generated on a Mac contains only the darwin-arm64 builds of the native toolchain and `npm ci` cannot build the frontend on Linux. Declaring the Linux binaries as direct optional dependencies forces npm to record them on every platform. Each MUST stay pinned to the same version as its darwin counterpart already in the lockfile; CI asserts this. See issue #100.",
+  "optionalDependencies": {
+    "@rolldown/binding-linux-x64-gnu": "1.1.5",
+    "@esbuild/linux-x64": "0.28.1",
+    "lightningcss-linux-x64-gnu": "1.32.0",
+    "@oxlint/binding-linux-x64-gnu": "1.74.0"
+  }
 }
