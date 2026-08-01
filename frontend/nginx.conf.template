@@ -1,0 +1,107 @@
+# Rendered to /etc/nginx/nginx.conf at container start by the base image's
+# envsubst entrypoint. Only ${API_UPSTREAM} and ${NGINX_LOCAL_RESOLVERS} are
+# substituted (NGINX_ENVSUBST_FILTER in frontend/Dockerfile pins that list) —
+# every other $var below is an nginx runtime variable and must survive verbatim.
+#
+# A full config, not a conf.d snippet: the container runs as the unprivileged
+# `nginx` user, so the pid file and every temp path have to move somewhere
+# writable. A snippet would leave those at their root-owned defaults and nginx
+# would fail to start.
+worker_processes auto;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events {
+  worker_connections 1024;
+}
+
+http {
+  include /etc/nginx/mime.types;
+  default_type application/octet-stream;
+  access_log /dev/stdout;
+
+  client_body_temp_path /tmp/client_temp;
+  proxy_temp_path /tmp/proxy_temp;
+  fastcgi_temp_path /tmp/fastcgi_temp;
+  uwsgi_temp_path /tmp/uwsgi_temp;
+  scgi_temp_path /tmp/scgi_temp;
+
+  sendfile on;
+  tcp_nopush on;
+  keepalive_timeout 65;
+  # Do not advertise the exact nginx version in responses and error pages.
+  server_tokens off;
+
+  gzip on;
+  gzip_vary on;
+  gzip_min_length 1024;
+  gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+  server {
+    # Same port as the Vite dev server, so docker-compose.yml publishes the same
+    # mapping whether it built the dev or the prod target.
+    listen 5173;
+    server_name _;
+
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Filled in at startup from /etc/resolv.conf by the base image's
+    # 15-local-resolvers.envsh (enabled via NGINX_ENTRYPOINT_LOCAL_RESOLVERS),
+    # because the address differs per platform: 127.0.0.11 under Docker,
+    # something else on a managed container host. Resolving the upstream through
+    # a variable re-resolves it periodically instead of caching one address for
+    # the life of the process, so an api container that restarts on a new
+    # address does not black-hole every request until nginx restarts too.
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+
+    # The SPA calls /api/... on its own origin (see frontend/src/serverAPI.ts),
+    # which is what the Vite dev server proxy does in development. Keeping that
+    # shape in production means no CORS preflight and no API URL baked into the
+    # bundle at build time.
+    location /api/ {
+      set $api_upstream ${API_UPSTREAM};
+      proxy_pass $api_upstream$request_uri;
+      proxy_http_version 1.1;
+      # $proxy_host, not $host: when the upstream is a platform ingress rather
+      # than a sibling container, that ingress routes on the Host header and a
+      # forwarded browser Host would not match any of its routes.
+      proxy_set_header Host $proxy_host;
+      # Required for SNI when API_UPSTREAM is https://.
+      proxy_ssl_server_name on;
+      proxy_set_header X-Real-IP $remote_addr;
+      # The API rate-limits per client address and trusts a fixed number of hops
+      # (TRUST_PROXY_HOPS) — this proxy being the last one. Without this header
+      # every browser would share a single bucket.
+      proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+      proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Vite fingerprints these filenames, so a stale copy is impossible. One
+    # Cache-Control header only: `expires` emits its own, and a response
+    # carrying two of them is ambiguous.
+    #
+    # The security headers below are repeated in each location on purpose.
+    # nginx's add_header does not merge across levels: a location that sets any
+    # add_header discards every add_header inherited from the server block, so
+    # declaring these once at server level would silently drop them here.
+    location /assets/ {
+      add_header Cache-Control "public, max-age=31536000, immutable";
+      add_header X-Content-Type-Options "nosniff";
+      add_header Referrer-Policy "no-referrer";
+      try_files $uri =404;
+    }
+
+    # index.html names the current bundle, so caching it would pin browsers to
+    # the previous deploy. Unknown paths fall back to it so the SPA renders.
+    location / {
+      add_header Cache-Control "no-cache";
+      add_header X-Content-Type-Options "nosniff";
+      add_header Referrer-Policy "no-referrer";
+      # A vault UI must never be framed: clickjacking it means a user unlocking
+      # their vault into an attacker's overlay.
+      add_header X-Frame-Options "DENY";
+      try_files $uri $uri/ /index.html;
+    }
+  }
+}

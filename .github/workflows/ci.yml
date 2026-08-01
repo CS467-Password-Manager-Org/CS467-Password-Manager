@@ -44,9 +44,13 @@ jobs:
             const opt = require("./package.json").optionalDependencies || {};
             const pairs = {
               "@rolldown/binding-linux-x64-gnu": "@rolldown/binding-darwin-arm64",
+              "@rolldown/binding-linux-arm64-gnu": "@rolldown/binding-darwin-arm64",
               "@esbuild/linux-x64": "@esbuild/darwin-arm64",
+              "@esbuild/linux-arm64": "@esbuild/darwin-arm64",
               "lightningcss-linux-x64-gnu": "lightningcss-darwin-arm64",
+              "lightningcss-linux-arm64-gnu": "lightningcss-darwin-arm64",
               "@oxlint/binding-linux-x64-gnu": "@oxlint/binding-darwin-arm64",
+              "@oxlint/binding-linux-arm64-gnu": "@oxlint/binding-darwin-arm64",
             };
             let bad = 0;
             for (const [linux, darwin] of Object.entries(pairs)) {
