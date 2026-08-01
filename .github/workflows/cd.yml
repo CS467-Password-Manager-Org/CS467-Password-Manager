@@ -9,6 +9,12 @@ on:
     workflows: [CI]
     types: [completed]
     branches: [main]
+  # TEMPORARY: verifies this pipeline end to end before it is merged.
+  # workflow_dispatch cannot be triggered until the workflow exists on the
+  # default branch, so there is no other way to exercise it pre-merge.
+  # Removed in the following commit — do not merge with this present.
+  push:
+    branches: [u/omarsaleh/frontend-prod-container]
   # Manual runs for redeploying or rolling back. `image_tag` accepts any tag
   # already in the registry, so rolling back is pointing at a previous commit
   # SHA rather than reverting and waiting for a rebuild.
