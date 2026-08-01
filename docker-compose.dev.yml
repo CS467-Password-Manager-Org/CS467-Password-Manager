@@ -10,6 +10,13 @@ services:
   api:
     build:
       target: dev
+    environment:
+      # The Vite dev server proxies /api to this container, so the API sees the
+      # proxy rather than the browser. One hop, paired with xfwd: true in
+      # frontend/vite.config.ts, restores per-client rate-limit buckets. Base
+      # compose leaves this unset (trust nobody), which is correct when the
+      # browser reaches the API directly.
+      TRUST_PROXY_HOPS: 1
     volumes:
       - ./api:/app/api
       - ./packages/shared:/app/packages/shared

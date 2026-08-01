@@ -5,6 +5,7 @@ import { MfaSetupForm } from '../components/MfaSetupForm';
 import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from '@app/shared';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
+import { clearEncryptionKey } from '../keyStore';
 
 function CreatePasswordForm({
   encryptVaultItem,
@@ -126,10 +127,21 @@ export function PasswordsPage({
   const [passwordsError, setPasswordsError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [userEmail, setUserEmail] = useState('');
-  const [mfaEnabled, setMfaEnabled] = useState(false);
+  // Tri-state: null means "not known yet". Defaulting to false made the page
+  // claim MFA was off before /me answered, so a user who has MFA enabled was
+  // briefly told their account was unprotected and offered a setup form.
+  const [mfaEnabled, setMfaEnabled] = useState<boolean | null>(null);
 
   const loadPasswords = async (key: CryptoKey) => {
-    const response = await fetchVaultItems();
+    await applyVaultItems(await fetchVaultItems(), key);
+  };
+
+  // Split out so the initial load can fetch items alongside /me and hand the
+  // response in, rather than waiting for /me to resolve first.
+  const applyVaultItems = async (
+    response: Awaited<ReturnType<typeof fetchVaultItems>>,
+    key: CryptoKey,
+  ) => {
     if (response.publicErrorMessage) {
       setPasswordsError(response.publicErrorMessage);
       return;
@@ -193,17 +205,40 @@ export function PasswordsPage({
 
   useEffect(() => {
     const fetchData = async () => {
-      const { data } = await fetchMe();
-      const email = data?.email ?? '';
-      setUserEmail(email);
-      setMfaEnabled(data?.mfaEnabled ?? false);
+      // Fire both together. They are independent — each only needs the token —
+      // and serialising them cost a full extra round-trip on every page load,
+      // which is what made the vault appear noticeably after the rest of the
+      // page. The items request is skipped when there is no key, since nothing
+      // could be decrypted with it anyway.
+      const [me, itemsResponse] = await Promise.all([
+        fetchMe(),
+        encryptionKey ? fetchVaultItems() : Promise.resolve(null),
+      ]);
 
-      if (!email || !encryptionKey) {
+      const email = me.data?.email ?? '';
+      setUserEmail(email);
+      setMfaEnabled(me.data?.mfaEnabled ?? false);
+
+      // No valid session: the token is missing, expired, or was revoked. Drop the
+      // stored encryption key as well, so it never outlives the session that
+      // justified holding it, then send the user to sign in again.
+      if (!email) {
+        await clearEncryptionKey();
         redirect('/login');
         return;
       }
 
-      await loadPasswords(encryptionKey);
+      // Session is valid but the vault key is unavailable — for example when
+      // IndexedDB is blocked, so the key could not survive the reload. Signing in
+      // again is the only way to re-derive it from the master password.
+      if (!encryptionKey) {
+        redirect('/login');
+        return;
+      }
+
+      if (itemsResponse) {
+        await applyVaultItems(itemsResponse, encryptionKey);
+      }
     };
 
     fetchData();
@@ -214,7 +249,7 @@ export function PasswordsPage({
       <h2>Passwords</h2>
       {userEmail && <p>Logged in as {userEmail}</p>}
 
-      {mfaEnabled ? (
+      {mfaEnabled === null ? null : mfaEnabled ? (
         <p>Multi-factor authentication is enabled.</p>
       ) : (
         <MfaSetupForm

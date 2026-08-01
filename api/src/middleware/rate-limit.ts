@@ -2,6 +2,8 @@ import { createHmac } from "node:crypto";
 import type { Request, Response } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { config } from "../config.js";
+import { verifyAccessToken } from "../lib/jwt.js";
+import { isBlocked } from "../lib/token-blocklist.js";
 
 // MemoryStore: per-process counters, so a multi-replica deploy needs a shared store.
 
@@ -45,13 +47,47 @@ function accountVerifyKey(req: Request): string {
   return `ip:${ipKeyGenerator(req.ip ?? "")}`;
 }
 
-// Coarse IP ceiling over the whole auth surface; an abuse/CPU safeguard only.
+// Endpoints that require a valid token. A signed-in user hits /me on every page
+// load, so counting those against a budget sized for brute-force protection
+// locks a legitimate user out of their own account during normal use. /logout is
+// listed for a second reason: a throttled user must still be able to sign out,
+// which is the one action that reduces risk.
+//
+// Paths are matched relative to the mount point, so "/me" rather than
+// "/api/v1/auth/me".
+const SESSION_PATHS = new Set(["/me", "/logout"]);
+
+// The exemption is earned by proving a valid session, never by the path alone.
+// An unauthenticated request to /me is indistinguishable from any other
+// anonymous traffic and must still be counted, otherwise these paths become a
+// free, unmetered surface for anyone who omits the header.
+//
+// This duplicates the check requireAuth performs a moment later, because the
+// limiter necessarily runs first. It is an HMAC verification over a short
+// string plus a Set lookup, so the cost is negligible next to the argon2 work
+// on the endpoints this limiter exists to protect. Any failure — malformed
+// header, bad signature, expired, revoked — falls through to being counted.
+function hasValidSession(req: Request): boolean {
+  const header = req.headers.authorization;
+  if (!header || !header.startsWith("Bearer ")) {
+    return false;
+  }
+  try {
+    const { jti } = verifyAccessToken(header.slice("Bearer ".length).trim());
+    return !isBlocked(jti);
+  } catch {
+    return false;
+  }
+}
+
+// Coarse IP ceiling over the unauthenticated auth surface; an abuse/CPU safeguard only.
 export const authLimiter = rateLimit({
   windowMs: config.AUTH_RATE_LIMIT_WINDOW_MS,
   limit: config.AUTH_RATE_LIMIT_MAX,
   standardHeaders: HEADERS_DRAFT,
   legacyHeaders: false,
   message: RATE_LIMITED_BODY,
+  skip: (req) => SESSION_PATHS.has(req.path) && hasValidSession(req),
 });
 
 const MFA_CHALLENGE_ISSUED = "mfa_challenge_issued";

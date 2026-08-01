@@ -151,6 +151,10 @@ Two independent layers, both counting in memory per process.
 
 **Surface limiter** — every `/api/v1/auth` route, keyed by IP. Defaults to 100 requests per 15 minutes (`AUTH_RATE_LIMIT_MAX`, `AUTH_RATE_LIMIT_WINDOW_MS`). A coarse abuse and CPU safeguard.
 
+`GET /me` and `POST /logout` are exempt **when the request carries a valid, unrevoked token**. A signed-in client calls `/me` on every page load, and counting that against a budget sized for brute-force protection would lock a legitimate user out of their own account after a few dozen refreshes; sign-out is exempt because a throttled user must still be able to end their session. The exemption is earned by proving a session, never by the path alone — an anonymous or forged-token request to `/me` is counted like any other unauthenticated traffic.
+
+Because the limiter keys on `req.ip`, an API behind a reverse proxy sees the proxy rather than the client and every user shares one bucket. Set `TRUST_PROXY_HOPS` to the real number of proxies in that case. It defaults to `0`, which trusts nobody: honouring a forwarded header that no proxy actually set would let a client spoof `X-Forwarded-For` and hand itself a fresh bucket per request.
+
 **Verification limiters** — `POST /login`, `POST /mfa/activate`, and `DELETE /mfa`, which are the routes where a secret can be guessed. Two limiters run together:
 
 | Limiter | Keyed by | Default budget |
