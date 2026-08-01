@@ -1,0 +1,197 @@
+name: CD
+
+# Deploys to Azure Container Apps after CI passes on main. Triggering on
+# `workflow_run` rather than `push` means a merge that breaks the build is never
+# shipped: the deploy only starts once the CI run for that exact commit has
+# finished successfully.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # Manual runs for redeploying or rolling back. `image_tag` accepts any tag
+  # already in the registry, so rolling back is pointing at a previous commit
+  # SHA rather than reverting and waiting for a rebuild.
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Existing image tag to deploy (default: build from this ref)"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  # Required for the OIDC token exchanged for Azure credentials. No client
+  # secret is stored anywhere: the three AZURE_* values are identifiers, and the
+  # federated credential in Entra ID only trusts tokens issued to this repo's
+  # main branch.
+  id-token: write
+
+# Deploys must never overlap or be cancelled halfway through, which would leave
+# the two apps on different commits.
+concurrency:
+  group: cd
+  cancel-in-progress: false
+
+env:
+  RESOURCE_GROUP: rg-pwmgr-dev
+  REGISTRY: crpwmgrdev1ce74e
+
+jobs:
+  deploy:
+    name: Deploy ${{ matrix.app }}
+    # workflow_run fires on failure too, so the conclusion has to be checked
+    # explicitly — without this, a red CI run would still deploy.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    strategy:
+      # One app failing should not abandon the other mid-rollout.
+      fail-fast: false
+      matrix:
+        include:
+          - app: api
+            image: pwmgr-api
+            dockerfile: api/Dockerfile
+            containerapp: ca-pwmgr-api-dev-001
+          - app: web
+            image: pwmgr-web
+            dockerfile: frontend/Dockerfile
+            containerapp: ca-pwmgr-web-dev-001
+
+    steps:
+      # The commit CI actually tested, not whatever main points at now. A merge
+      # landing while this runs would otherwise ship an untested tree.
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.image_tag }}" ]; then
+            echo "tag=${{ inputs.image_tag }}" >> "$GITHUB_OUTPUT"
+            echo "build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.event.workflow_run.head_sha || github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # Not preinstalled on the runner, and az would otherwise stop to ask.
+      - name: Install the containerapp extension
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      # Built in the registry rather than on the runner: no docker login, no
+      # registry credentials in the workflow, and the same command developers
+      # run locally (see README). --platform is explicit because Container Apps
+      # runs amd64 and a silently-arm64 image fails only at startup.
+      - name: Build ${{ matrix.image }}:${{ steps.tag.outputs.tag }}
+        if: steps.tag.outputs.build == 'true'
+        run: |
+          az acr build \
+            --registry "$REGISTRY" \
+            --image "${{ matrix.image }}:${{ steps.tag.outputs.tag }}" \
+            --image "${{ matrix.image }}:latest" \
+            --file "${{ matrix.dockerfile }}" \
+            --target prod \
+            --platform linux/amd64 \
+            .
+
+      # Deployed by immutable SHA tag, never :latest — a container app pinned to
+      # a moving tag can silently restart onto a different build.
+      - name: Deploy to ${{ matrix.containerapp }}
+        run: |
+          az containerapp update \
+            --name "${{ matrix.containerapp }}" \
+            --resource-group "$RESOURCE_GROUP" \
+            --image "$REGISTRY.azurecr.io/${{ matrix.image }}:${{ steps.tag.outputs.tag }}" \
+            --output none
+
+      - name: Wait for the new revision to become healthy
+        run: |
+          app="${{ matrix.containerapp }}"
+          for attempt in $(seq 1 30); do
+            read -r name state health <<<"$(az containerapp revision list \
+              --name "$app" --resource-group "$RESOURCE_GROUP" \
+              --query "sort_by([?properties.active], &properties.createdTime)[-1].[name,properties.runningState,properties.healthState]" \
+              -o tsv)"
+            echo "attempt $attempt: $name state=$state health=$health"
+            case "$state" in
+              Running|RunningAtMaxScale) echo "revision $name is running"; exit 0 ;;
+              Failed|Degraded) echo "::error::revision $name reported $state"; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "::error::revision did not reach a running state in time"
+          exit 1
+
+  smoke:
+    name: Smoke test the deployment
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sign in to Azure
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Install the containerapp extension
+        run: az extension add --name containerapp --upgrade --only-show-errors
+
+      - name: Resolve the public URL
+        id: url
+        run: |
+          fqdn=$(az containerapp show --name ca-pwmgr-web-dev-001 \
+            --resource-group "$RESOURCE_GROUP" \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "base=https://$fqdn" >> "$GITHUB_OUTPUT"
+
+      # Read-only checks on purpose: a deploy gate must not write rows to the
+      # real database on every merge. These still cover the whole path —
+      # ingress, nginx, the /api proxy, the API, and a database read.
+      - name: Verify the live site
+        run: |
+          base="${{ steps.url.outputs.base }}"
+          fail=0
+          check() { # check <expected> <label> <url> [grep-for]
+            for attempt in $(seq 1 10); do
+              code=$(curl -s -o /tmp/body -w '%{http_code}' --max-time 20 "$3" || true)
+              [ "$code" = "$1" ] && break
+              sleep 6
+            done
+            if [ "$code" != "$1" ]; then
+              echo "::error::$2 returned $code, expected $1"; fail=1; return
+            fi
+            if [ -n "${4:-}" ] && ! grep -q "$4" /tmp/body; then
+              echo "::error::$2 body did not contain '$4'"; fail=1; return
+            fi
+            echo "ok   $2 ($code)"
+          }
+
+          check 200 "the UI is served"            "$base/"                                  "<div id=\"root\">"
+          check 200 "client-side routes resolve"  "$base/login"                             "<div id=\"root\">"
+          check 200 "the API answers through the proxy" "$base/api/health"                  '"status":"ok"'
+          check 200 "the API can read the database"    "$base/api/v1/auth/salt?email=cd-probe@example.com" '"salt"'
+          check 404 "missing assets are not the SPA"   "$base/assets/does-not-exist.js"
+
+          exit "$fail"
+
+      - name: Summarise
+        if: always()
+        run: |
+          {
+            echo "### Deployed"
+            echo ""
+            echo "- Commit: \`${{ github.event.workflow_run.head_sha || github.sha }}\`"
+            echo "- URL: ${{ steps.url.outputs.base }}"
+          } >> "$GITHUB_STEP_SUMMARY"
