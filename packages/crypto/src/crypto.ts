@@ -10,6 +10,7 @@
  */
 
 import { argon2id } from "hash-wasm";
+import zxcvbn from "zxcvbn";
 
 import { COMMON_PASSWORDS } from "./common-passwords.js";
 
@@ -421,4 +422,60 @@ export function isReusedPassword(
   decryptedItems: readonly VaultItemSecret[],
 ): boolean {
   return decryptedItems.some((item) => item.password === password);
+}
+
+/** zxcvbn's 0-4 strength score */
+export type PasswordStrengthScore = 0 | 1 | 2 | 3 | 4;
+
+const STRENGTH_LABELS: Record<PasswordStrengthScore, string> = {
+  0: "Very Weak",
+  1: "Weak",
+  2: "Fair",
+  3: "Strong",
+  4: "Very Strong",
+};
+
+export interface PasswordStrength {
+  score: PasswordStrengthScore;
+  label: string;
+  /** Warning plus suggestions for improving the password; empty once it's strong enough. */
+  feedback: string[];
+  /** Human-readable estimate (e.g. "3 hours") assuming a slow offline hash. */
+  crackTimeDisplay: string;
+}
+
+/**
+ * Scores a candidate password with zxcvbn (pattern/dictionary-based, unlike the
+ * length/class rules generateSuggestedPassword enforces).
+ *
+ * userInputs (e.g. the email typed into the same form) are added as an extra dictionary:
+ * any password that contains a piece of one of these strings is scored as a trivial guess for that piece. 
+ * It's a substring/token match, not equality — "alice2000xyz!" is still penalized against userInputs=["alice2000@example.com"] even though the two aren't equal.
+ */
+export function evaluatePasswordStrength(
+  password: string,
+  userInputs: readonly string[] = [],
+): PasswordStrength {
+  if (!password) {
+    return {
+      score: 0,
+      label: "Too Short",
+      feedback: ["Enter a password to evaluate strength."],
+      crackTimeDisplay: "instant",
+    };
+  }
+
+  const result = zxcvbn(password, [...userInputs]);
+  const feedback: string[] = [];
+  if (result.feedback.warning) {
+    feedback.push(result.feedback.warning);
+  }
+  feedback.push(...result.feedback.suggestions);
+
+  return {
+    score: result.score,
+    label: STRENGTH_LABELS[result.score],
+    feedback,
+    crackTimeDisplay: String(result.crack_times_display.offline_slow_hashing_1e4_per_second),
+  };
 }
