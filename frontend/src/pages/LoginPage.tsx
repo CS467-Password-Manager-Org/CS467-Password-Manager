@@ -17,11 +17,13 @@ import { base64ToBytes, bytesToBase64, type DerivedKeys } from '@app/crypto';
 export function LoginPage({
   fetchUserSalt,
   deriveKeys,
+  persistEncryptionKey,
   login,
   redirect,
 }: {
   fetchUserSalt: (email: string) => Promise<ServerResponse<SaltResponse | null>>;
   deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
+  persistEncryptionKey: (key: CryptoKey) => Promise<void>;
   login: (email: string, authKey: string, code?: string) => Promise<LoginResult>;
   redirect: (newPath: string) => void;
 }) {
@@ -33,6 +35,9 @@ export function LoginPage({
   const [loginError, setLoginError] = useState('');
 
   const [authKey, setAuthKey] = useState('');
+  // Held so the MFA step can persist it once the second factor succeeds. The
+  // key is only ever written to storage after the server issues a token.
+  const [derivedKey, setDerivedKey] = useState<CryptoKey | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [formMfaCode, setFormMfaCode] = useState('');
   const [mfaError, setMfaError] = useState('');
@@ -67,9 +72,10 @@ export function LoginPage({
     }
 
     try {
-      const { authKey } = await deriveKeys(formPassword, userSalt);
+      const { authKey, encryptionKey } = await deriveKeys(formPassword, userSalt);
       const authKeyBase64 = bytesToBase64(authKey);
       setAuthKey(authKeyBase64);
+      setDerivedKey(encryptionKey);
 
       const { data, publicErrorMessage, mfaRequired } = await login(formEmail, authKeyBase64);
       if (mfaRequired) {
@@ -85,6 +91,8 @@ export function LoginPage({
       // TODO: store in sessionStorage for now, not secure. We probably want to
       // move to a cookie.
       sessionStorage.setItem('token', data.token);
+      // Only now, with a token in hand, does the key earn a place on disk.
+      await persistEncryptionKey(encryptionKey);
 
       redirect('/passwords');
     } catch (e) {
@@ -112,6 +120,11 @@ export function LoginPage({
       // TODO: store in sessionStorage for now, not secure. We probably want to
       // move to a cookie.
       sessionStorage.setItem('token', data.token);
+      // The second factor has now passed, so the key derived at the password
+      // step is finally allowed to persist.
+      if (derivedKey) {
+        await persistEncryptionKey(derivedKey);
+      }
 
       redirect('/passwords');
     } catch (e) {

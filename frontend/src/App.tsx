@@ -72,10 +72,18 @@ function Routes() {
   const handleDeriveKeys = async (password: string, salt: Uint8Array): Promise<DerivedKeys> => {
     const derived = await deriveKeys(password, salt);
     setEncryptionKey(derived.encryptionKey);
-    // Persist so a reload does not lose the ability to decrypt the vault. Only
-    // the encryption key is stored; authKey stays in memory.
-    await saveEncryptionKey(derived.encryptionKey);
     return derived;
+  };
+
+  // Deliberately separate from deriving the key. Derivation happens before the
+  // server has seen anything, so persisting there wrote the key to disk on the
+  // strength of a password nobody had checked: a correct password with the MFA
+  // step abandoned left the real vault key stored with no session behind it,
+  // and a mistyped password overwrote a good stored key with a useless one,
+  // breaking decryption on the next reload. The caller persists only once the
+  // server has issued a token.
+  const persistEncryptionKey = async (key: CryptoKey): Promise<void> => {
+    await saveEncryptionKey(key);
   };
 
   switch (path) {
@@ -88,6 +96,7 @@ function Routes() {
         <LoginPage
           fetchUserSalt={fetchUserSalt}
           deriveKeys={handleDeriveKeys}
+          persistEncryptionKey={persistEncryptionKey}
           login={login}
           redirect={redirect}
         />
