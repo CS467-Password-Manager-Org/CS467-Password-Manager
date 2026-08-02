@@ -126,12 +126,19 @@ jobs:
       - name: Wait for the new revision to become healthy
         run: |
           app="${{ matrix.containerapp }}"
-          for attempt in $(seq 1 30); do
-            read -r name state health <<<"$(az containerapp revision list \
+          # One scalar per call on purpose: a multi-value --query with -o tsv
+          # prints each value on its own line, so reading them into several
+          # variables at once silently leaves all but the first empty.
+          latest() {
+            az containerapp revision list \
               --name "$app" --resource-group "$RESOURCE_GROUP" \
-              --query "sort_by([?properties.active], &properties.createdTime)[-1].[name,properties.runningState,properties.healthState]" \
-              -o tsv)"
-            echo "attempt $attempt: $name state=$state health=$health"
+              --query "sort_by([?properties.active], &properties.createdTime)[-1].$1" \
+              -o tsv
+          }
+          for attempt in $(seq 1 30); do
+            name=$(latest name)
+            state=$(latest properties.runningState)
+            echo "attempt $attempt: ${name:-<none>} state=${state:-<unknown>}"
             case "$state" in
               Running|RunningAtMaxScale) echo "revision $name is running"; exit 0 ;;
               Failed|Degraded) echo "::error::revision $name reported $state"; exit 1 ;;
