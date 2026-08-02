@@ -24,6 +24,7 @@ import {
 } from './serverAPI';
 import { PasswordsPage } from './pages/PasswordsPage';
 import { RegisterPage } from './pages/RegisterPage';
+import { HomePage } from './pages/HomePage';
 
 function App() {
   return (
@@ -78,6 +79,10 @@ function Routes() {
   };
 
   switch (path) {
+    // Without this the root URL fell through to PageNotFound, so opening the
+    // site at all looked broken.
+    case '/':
+      return <HomePage redirect={redirect} />;
     case '/login':
       return (
         <LoginPage
@@ -126,14 +131,18 @@ function Routes() {
         />
       );
     default:
-      return <PageNotFound />;
+      return <PageNotFound redirect={redirect} />;
   }
 }
 
-function PageNotFound() {
+function PageNotFound({ redirect }: { redirect: (newPath: string) => void }) {
   return (
     <div>
       <h2>Page Not Found</h2>
+      {/* A dead end with no way out is the reason the root route was reported. */}
+      <button type="button" onClick={() => redirect('/')}>
+        Go to the home page
+      </button>
     </div>
   );
 }

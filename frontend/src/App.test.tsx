@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import App from './App';
 import { loadEncryptionKey } from './keyStore';
@@ -95,5 +95,45 @@ describe('App vault key hydration on reload', () => {
 
     await waitFor(() => expect(window.location.pathname).toBe('/login'));
     expect(fetchVaultItems).not.toHaveBeenCalled();
+  });
+});
+
+describe('App routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(loadEncryptionKey).mockResolvedValue(null);
+  });
+
+  afterEach(() => {
+    visit('/');
+  });
+
+  it('shows the home page at the root URL rather than Page Not Found', () => {
+    // The reported bug: opening the site at / rendered the 404 page, so the
+    // app looked broken before a user could reach either entry point.
+    visit('/');
+
+    render(<App />);
+
+    expect(screen.getByRole('heading', { name: 'Secure Password Manager' })).toBeInTheDocument();
+    expect(screen.queryByText('Page Not Found')).not.toBeInTheDocument();
+  });
+
+  it('still shows Page Not Found for a route that does not exist', () => {
+    visit('/no-such-page');
+
+    render(<App />);
+
+    expect(screen.getByText('Page Not Found')).toBeInTheDocument();
+  });
+
+  it('offers a way back home from Page Not Found', () => {
+    visit('/no-such-page');
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Go to the home page' }));
+
+    expect(window.location.pathname).toBe('/');
+    expect(screen.getByRole('heading', { name: 'Secure Password Manager' })).toBeInTheDocument();
   });
 });
