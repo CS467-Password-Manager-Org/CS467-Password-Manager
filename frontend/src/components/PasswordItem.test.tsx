@@ -19,7 +19,15 @@ function renderPasswordItem(overrides = {}) {
     ...overrides,
   };
 
-  render(<PasswordItem {...props} />);
+  // The component renders a <tr>, so it needs a table around it or React
+  // warns about invalid nesting and the row renders outside any row group.
+  render(
+    <table>
+      <tbody>
+        <PasswordItem {...props} />
+      </tbody>
+    </table>,
+  );
   return props;
 }
 
@@ -28,49 +36,49 @@ describe('PasswordItem', () => {
     renderPasswordItem();
 
     expect(screen.getByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Username: someone')).toBeInTheDocument();
+    expect(screen.getByText('someone')).toBeInTheDocument();
   });
 
   it('hides the password by default', () => {
     renderPasswordItem();
 
     expect(screen.queryByText(/super-secret/)).not.toBeInTheDocument();
-    expect(screen.getByText('Reveal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reveal password' })).toBeInTheDocument();
   });
 
   it('reveals the password when the show button is clicked', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Reveal'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal password' }));
 
     expect(screen.getByText(/super-secret/)).toBeInTheDocument();
-    expect(screen.getByText('Hide')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Hide password' })).toBeInTheDocument();
   });
 
   it('hides the password again when clicked a second time', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Reveal'));
-    fireEvent.click(screen.getByText('Hide'));
+    fireEvent.click(screen.getByRole('button', { name: 'Reveal password' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Hide password' }));
 
     expect(screen.queryByText(/super-secret/)).not.toBeInTheDocument();
-    expect(screen.getByText('Reveal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reveal password' })).toBeInTheDocument();
   });
 
   it('copies the password to the clipboard when the copy button is clicked', async () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Copy'));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy password' }));
 
     await waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledWith('super-secret'));
-    expect(await screen.findByText('Copied!')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Copied!' })).toBeInTheDocument();
   });
 
   it('asks for confirmation and calls onDelete with the item id when confirmed', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const props = renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
 
     expect(confirmSpy).toHaveBeenCalledWith('Delete the password entry for Email?');
     await waitFor(() => expect(props.onDelete).toHaveBeenCalledWith('item-1'));
@@ -82,7 +90,7 @@ describe('PasswordItem', () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
     const props = renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
 
     expect(confirmSpy).toHaveBeenCalled();
     expect(props.onDelete).not.toHaveBeenCalled();
@@ -93,7 +101,7 @@ describe('PasswordItem', () => {
   it('shows an edit form pre-filled with the current values when Edit is clicked', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
 
     expect(screen.getByPlaceholderText('Site name')).toHaveValue('Email');
     expect(screen.getByPlaceholderText('Username')).toHaveValue('someone');
@@ -103,7 +111,7 @@ describe('PasswordItem', () => {
   it('calls onEdit with the updated fields when Save is clicked', async () => {
     const props = renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.input(screen.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
     fireEvent.input(screen.getByPlaceholderText('Username'), { target: { value: 'newuser' } });
     fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'new-secret' } });
@@ -121,7 +129,7 @@ describe('PasswordItem', () => {
   it('exits edit mode after a successful save', async () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.click(screen.getByText('Save'));
 
     await waitFor(() => expect(screen.queryByPlaceholderText('Site name')).not.toBeInTheDocument());
@@ -133,7 +141,7 @@ describe('PasswordItem', () => {
       onEdit: vi.fn().mockResolvedValue('Error updating password.'),
     });
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.click(screen.getByText('Save'));
 
     expect(await screen.findByText('Error: Error updating password.')).toBeInTheDocument();
@@ -144,7 +152,7 @@ describe('PasswordItem', () => {
   it('discards changes and exits edit mode when Cancel is clicked', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.input(screen.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
     fireEvent.click(screen.getByText('Cancel'));
 
@@ -155,7 +163,7 @@ describe('PasswordItem', () => {
   it('fills in a generated password when Generate is clicked while editing', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.click(screen.getByText('Generate'));
 
     const passwordInput = screen.getByPlaceholderText('Password') as HTMLInputElement;
@@ -167,7 +175,7 @@ describe('PasswordItem', () => {
   it('warns when the edited password is a known common password', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'password' } });
 
     expect(screen.getByText(/very common/)).toBeInTheDocument();
@@ -178,7 +186,7 @@ describe('PasswordItem', () => {
       existingPasswords: [{ siteName: 'Bank', username: 'someone', password: 'shared-secret' }],
     });
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.input(screen.getByPlaceholderText('Password'), { target: { value: 'shared-secret' } });
 
     expect(screen.getByText(/already used for another vault entry/)).toBeInTheDocument();
@@ -187,7 +195,7 @@ describe('PasswordItem', () => {
   it('does not warn about a password that is neither common nor reused', () => {
     renderPasswordItem();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     fireEvent.input(screen.getByPlaceholderText('Password'), {
       target: { value: 'Xy9$qzL2!vRt8w' },
     });

@@ -1,8 +1,8 @@
 export function HomePage({ redirect }: { redirect: (newPath: string) => void }) {
   return (
-    <div>
+    <div className="home">
       <h1>Secure Password Manager</h1>
-      <p>
+      <p className="subtitle">
         Your vault is encrypted in your browser. The server only ever stores ciphertext it cannot
         read.
       </p>
@@ -16,7 +16,7 @@ export function HomePage({ redirect }: { redirect: (newPath: string) => void }) 
         single letter, and the two are a well-known source of misclicks.
       */}
       <div className="home-actions">
-        <button type="button" onClick={() => redirect('/login')}>
+        <button type="button" className="primary" onClick={() => redirect('/login')}>
           Sign in
         </button>
         <button type="button" onClick={() => redirect('/register')}>

@@ -2,6 +2,18 @@
   --text: #6b6375;
   --text-h: #08060d;
   --bg: #fff;
+  /* Cards sit on --bg, so they need their own surface to read as raised. */
+  --surface: #fff;
+  --surface-alt: #f6f5f9;
+  --border: #e3e0ea;
+  --accent: #6d4aff;
+  --accent-hover: #5b37f5;
+  --accent-contrast: #fff;
+  --danger: #b00020;
+  --radius: 10px;
+  --shadow:
+    0 1px 2px rgb(8 6 13 / 6%),
+    0 8px 24px rgb(8 6 13 / 6%);
   font:
     18px/145% system-ui,
     'Segoe UI',
@@ -17,6 +29,15 @@
     --text: #9ca3af;
     --text-h: #f3f4f6;
     --bg: #16171d;
+    --surface: #1d1f27;
+    --surface-alt: #23262f;
+    --border: #303442;
+    --accent: #8b6fff;
+    --accent-hover: #9c85ff;
+    --danger: #ff7a8a;
+    --shadow:
+      0 1px 2px rgb(0 0 0 / 30%),
+      0 8px 24px rgb(0 0 0 / 25%);
   }
 }
 
@@ -24,6 +45,87 @@ body {
   margin: 0;
 }
 
-h1 {
+h1,
+h2,
+h3,
+h4,
+h5 {
   color: var(--text-h);
+  line-height: 1.2;
+}
+
+/* Styling the primitives rather than every call site: these pages are plain
+   HTML with almost no classes, so element selectors restyle them without
+   touching markup the tests query by text, placeholder, or structure. */
+input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.55em 0.7em;
+  font: inherit;
+  color: var(--text-h);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+input::placeholder {
+  color: var(--text);
+  opacity: 0.75;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  padding: 0.5em 1.1em;
+  font: inherit;
+  font-size: 0.95em;
+  color: var(--text-h);
+  cursor: pointer;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+/* The one action a page wants you to take. */
+button.primary {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+button.primary:hover {
+  color: var(--accent-contrast);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+button.danger:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+code {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+/* Every transition here is decorative, so anyone asking for less motion gets
+   none of it. */
+@media (prefers-reduced-motion: no-preference) {
+  input,
+  button {
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
 }

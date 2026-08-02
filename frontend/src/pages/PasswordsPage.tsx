@@ -57,41 +57,48 @@ function CreatePasswordForm({
   };
 
   return (
-    <section>
+    <section className="card">
       <h3>Create New Password Entry</h3>
       <form>
-        <input
-          type="text"
-          placeholder="Site name"
-          onInput={(ev) => setFormSiteName(ev.currentTarget.value)}
-          value={formSiteName}
-        />
-        <input
-          type="text"
-          placeholder="Username"
-          onInput={(ev) => setFormUsername(ev.currentTarget.value)}
-          value={formUsername}
-        />
-        <input
-          type={revealed ? 'text' : 'password'}
-          placeholder="Password"
-          onInput={(ev) => setFormPassword(ev.currentTarget.value)}
-          value={formPassword}
-        />
-        <button type="button" onClick={() => setFormPassword(generateSuggestedPassword())}>
-          Generate
-        </button>
-        <button type="button" onClick={() => setRevealed((prev) => !prev)}>
-          {revealed ? 'Hide' : 'Show'}
-        </button>
-        <button onClick={handleCreatePassword}>Save</button>
+        <div className="stack">
+          <input
+            type="text"
+            placeholder="Site name"
+            onInput={(ev) => setFormSiteName(ev.currentTarget.value)}
+            value={formSiteName}
+          />
+          <input
+            type="text"
+            placeholder="Username"
+            onInput={(ev) => setFormUsername(ev.currentTarget.value)}
+            value={formUsername}
+          />
+          <input
+            type={revealed ? 'text' : 'password'}
+            placeholder="Password"
+            autoComplete="new-password"
+            onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+            value={formPassword}
+          />
+        </div>
+        <div className="actions">
+          <button type="button" onClick={() => setFormPassword(generateSuggestedPassword())}>
+            Generate
+          </button>
+          <button type="button" onClick={() => setRevealed((prev) => !prev)}>
+            {revealed ? 'Hide' : 'Show'}
+          </button>
+          <button className="primary" onClick={handleCreatePassword}>
+            Save
+          </button>
+        </div>
       </form>
 
       <PasswordWarnings password={formPassword} existingPasswords={existingPasswords} />
 
       {createError && (
         <div>
-          <p>Error: {createError}</p>
+          <p className="error">Error: {createError}</p>
         </div>
       )}
     </section>
@@ -247,10 +254,10 @@ export function PasswordsPage({
   return (
     <div>
       <h2>Passwords</h2>
-      {userEmail && <p>Logged in as {userEmail}</p>}
+      {userEmail && <p className="muted">Logged in as {userEmail}</p>}
 
       {mfaEnabled === null ? null : mfaEnabled ? (
-        <p>Multi-factor authentication is enabled.</p>
+        <p className="muted">Multi-factor authentication is enabled.</p>
       ) : (
         <MfaSetupForm
           enrollMfa={enrollMfa}
@@ -259,34 +266,43 @@ export function PasswordsPage({
         />
       )}
 
-      <section className="basic-flex">
-        {passwordsError && (
-          <section>
-            <h2>Error: {passwordsError}</h2>
-          </section>
-        )}
+      {passwordsError && <p className="error">Error: {passwordsError}</p>}
+      {deleteError && <p className="error">Error: {deleteError}</p>}
 
-        {deleteError && (
-          <section>
-            <h2>Error: {deleteError}</h2>
-          </section>
-        )}
+      {passwords && !passwordsError && passwords.length > 0 && (
+        // Wrapper scrolls instead of the page: a vault entry can hold a long
+        // site name or password, and a table that overflows the viewport would
+        // otherwise push the whole layout sideways.
+        <div className="table-wrap">
+          <table className="vault-table">
+            <thead>
+              <tr>
+                <th scope="col">Site</th>
+                <th scope="col">Username</th>
+                <th scope="col">Password</th>
+                <th scope="col" className="cell-actions">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {passwords.map((p) => (
+                <PasswordItem
+                  item={p}
+                  existingPasswords={passwords.filter((other) => other.id !== p.id)}
+                  onDelete={handleDelete}
+                  onEdit={handleEdit}
+                  key={p.id}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-        {passwords &&
-          !passwordsError &&
-          passwords.length > 0 &&
-          passwords.map((p) => (
-            <PasswordItem
-              item={p}
-              existingPasswords={passwords.filter((other) => other.id !== p.id)}
-              onDelete={handleDelete}
-              onEdit={handleEdit}
-              key={p.id}
-            />
-          ))}
-      </section>
-
-      {passwords && !passwordsError && passwords.length === 0 && <div>No passwords found.</div>}
+      {passwords && !passwordsError && passwords.length === 0 && (
+        <div className="empty-state">No passwords found.</div>
+      )}
 
       <CreatePasswordForm
         encryptVaultItem={encryptVaultItem}

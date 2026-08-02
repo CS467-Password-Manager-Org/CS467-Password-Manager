@@ -1,36 +1,218 @@
 #center {
-  max-width: 480px;
-  margin: 4rem auto;
+  max-width: 900px;
+  margin: 3rem auto 4rem;
+  padding: 0 1rem;
   text-align: center;
   font-family: system-ui, sans-serif;
 }
 
+.subtitle {
+  margin-top: 0.5rem;
+  color: var(--text);
+}
 
-.basic-flex {
+/* Panels. Auth forms are narrow so the eye has one column to follow; the vault
+   uses the full width for its grid. */
+.card {
+  padding: 1.5rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.card-narrow {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.card + .card {
+  margin-top: 1.25rem;
+}
+
+/* Label above input. Left-aligned inside an otherwise centred page, because a
+   centred label floating over a full-width box reads as unrelated to it. */
+.field {
+  display: grid;
+  gap: 0.35rem;
+  margin-bottom: 1rem;
+  text-align: left;
+}
+
+.field > label {
+  font-size: 0.85em;
+  color: var(--text);
+}
+
+.stack {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Forms are grids so their last input is never glued to the button row below
+   it — the gap is part of the layout rather than a margin on one child. */
+form {
+  display: grid;
+  gap: 1rem;
+}
+
+.actions {
   display: flex;
-  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+}
+
+.actions-start {
+  justify-content: flex-start;
 }
 
 .home-actions {
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 0.75rem;
-  margin-top: 1.5rem;
+  justify-content: center;
+  margin-top: 1.75rem;
 }
 
-.password-item {
-  min-height: 10em;
-  min-width: 15em;
-  border: 1px solid black;
-  padding: 1em;
+.error {
+  margin: 0.75rem 0 0;
+  color: var(--danger);
+  font-size: 0.9em;
+  text-align: left;
+}
+
+.muted {
+  color: var(--text);
+  font-size: 0.9em;
+}
+
+/* Vault table. One row per entry, so entries line up column by column and stay
+   scannable as the list grows — which a grid of cards does not. */
+.table-wrap {
+  margin: 1.5rem 0;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.vault-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.vault-table th {
+  padding: 0.75rem 1rem;
+  font-size: 0.72em;
+  font-weight: 600;
+  color: var(--text);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.vault-table td {
+  padding: 0.75rem 1rem;
+  font-size: 0.9em;
+  vertical-align: middle;
+  overflow-wrap: anywhere;
+}
+
+.vault-table tbody tr + tr td {
+  border-top: 1px solid var(--border);
+}
+
+.vault-table tbody tr:hover td {
+  background: var(--surface-alt);
+}
+
+.cell-site {
+  font-weight: 600;
+  color: var(--text-h);
+}
+
+/* Monospace so a revealed password can be read character by character, and the
+   dots line up evenly while it is masked. */
+.cell-secret {
+  font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+.cell-actions {
+  width: 1%;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.icon-row {
+  display: flex;
+  gap: 0.25rem;
+  justify-content: flex-end;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.4em;
+  color: var(--text);
+  background: transparent;
+  border-color: transparent;
+}
+
+.icon-btn:hover {
+  color: var(--accent);
+  background: var(--surface-alt);
+  border-color: var(--border);
+}
+
+.icon-btn.danger:hover {
+  color: var(--danger);
+}
+
+/* The edit form takes over the whole row, so it needs the padding a normal
+   cell would have given it. */
+.password-item td {
+  padding: 1rem;
+  background: var(--surface-alt);
+}
+
+.empty-state {
+  padding: 2rem 1rem;
+  color: var(--text);
+  background: var(--surface-alt);
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
 }
 
 .password-warnings {
-  color: #b00020;
-  font-size: 0.9em;
+  color: var(--danger);
+  font-size: 0.85em;
   text-align: left;
 }
 
 .password-warnings p {
   margin: 0.25em 0;
+}
+
+/* A QR code has to stay light even in dark mode: inverting it makes it
+   unscannable by most reader apps. */
+.mfa-qr {
+  width: 180px;
+  height: 180px;
+  padding: 0.5rem;
+  background: #fff;
+  border-radius: var(--radius);
+}
+
+.secret-key {
+  display: inline-block;
+  padding: 0.35em 0.6em;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
 }

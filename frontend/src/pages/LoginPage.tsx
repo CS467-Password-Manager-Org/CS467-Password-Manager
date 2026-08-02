@@ -121,65 +121,89 @@ export function LoginPage({
   };
 
   return (
-    <div>
-      <h2>Login Page</h2>
+    <div className="card card-narrow">
+      <h2>Sign in</h2>
 
       {!userSalt ? (
         <>
-          <h3>Enter your Email Address</h3>
           <form>
-            <input
-              type="text"
-              onInput={(ev) => {
-                setFormEmail(ev.currentTarget.value);
-              }}
-              value={formEmail}
-            />
-            <button onClick={handleFetchUserSalt}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-email">Enter your Email Address</label>
+              <input
+                id="login-email"
+                type="text"
+                autoComplete="username"
+                onInput={(ev) => {
+                  setFormEmail(ev.currentTarget.value);
+                }}
+                value={formEmail}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleFetchUserSalt}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {fetchUserSaltError && (
             <div>
-              <p>Error: {fetchUserSaltError}</p>
+              <p className="error">Error: {fetchUserSaltError}</p>
             </div>
           )}
         </>
       ) : mfaRequired ? (
         <>
-          <h3>Enter your Authentication Code</h3>
           <form>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="6-digit code"
-              onInput={(ev) => setFormMfaCode(ev.currentTarget.value)}
-              value={formMfaCode}
-            />
-            <button onClick={handleSubmitMfaCode}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-mfa-code">Enter your Authentication Code</label>
+              <input
+                id="login-mfa-code"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                onInput={(ev) => setFormMfaCode(ev.currentTarget.value)}
+                value={formMfaCode}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleSubmitMfaCode}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {mfaError && (
             <div>
-              <p>Error: {mfaError}</p>
+              <p className="error">Error: {mfaError}</p>
             </div>
           )}
         </>
       ) : (
         <>
-          <h3>Enter your Master Password</h3>
           <form>
-            <input
-              type="password"
-              onInput={(ev) => setFormPassword(ev.currentTarget.value)}
-              value={formPassword}
-            />
-            <button onClick={handleGenerateAuthKeyAndLogin}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-password">Enter your Master Password</label>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+                value={formPassword}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleGenerateAuthKeyAndLogin}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {loginError && (
             <div>
-              <p>Error: {loginError}</p>
+              <p className="error">Error: {loginError}</p>
             </div>
           )}
         </>
