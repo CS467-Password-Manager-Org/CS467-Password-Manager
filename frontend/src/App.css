@@ -151,6 +151,14 @@ form {
   white-space: nowrap;
 }
 
+/* The nowrap above keeps the icon row on one line, but it would also stop the
+   copy-failure message from wrapping, and that sentence is wider than a phone
+   screen — it pushed the whole page into horizontal overflow. */
+.cell-actions .error {
+  white-space: normal;
+  text-align: right;
+}
+
 .icon-row {
   display: flex;
   gap: 0.25rem;

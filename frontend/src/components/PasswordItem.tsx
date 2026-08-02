@@ -183,7 +183,14 @@ export function PasswordItem({
             <TrashIcon />
           </IconButton>
         </div>
-        {copyError && <p className="error">{copyError}</p>}
+        {/* role="alert" so the failure is announced: the only other signal is
+            the icon not turning into a checkmark, which a screen reader user
+            has no way to notice. */}
+        {copyError && (
+          <p className="error" role="alert">
+            {copyError}
+          </p>
+        )}
       </td>
     </tr>
   );
