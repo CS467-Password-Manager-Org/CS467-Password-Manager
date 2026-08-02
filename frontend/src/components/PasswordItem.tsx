@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from './PasswordWarnings';
 import {
@@ -37,6 +37,13 @@ export function PasswordItem({
   const [editUsername, setEditUsername] = useState(item.username);
   const [editPassword, setEditPassword] = useState(item.password);
   const [editError, setEditError] = useState('');
+  // Both transient messages share one timer slot. Without this, two copies in
+  // quick succession leave two timers running and the first one clears the
+  // state the second had just set — and either can fire after the row has been
+  // deleted and unmounted.
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => () => clearTimeout(feedbackTimer.current), []);
 
   const handleCopy = async () => {
     // A rejected clipboard write used to escape as an unhandled rejection and
@@ -44,16 +51,18 @@ export function PasswordItem({
     // and pasted whatever was on the clipboard before. Denied permission and
     // "document is not focused" are both routine, so the failure has to be
     // shown rather than swallowed.
+    clearTimeout(feedbackTimer.current);
     try {
       await navigator.clipboard.writeText(item.password);
     } catch {
+      setCopied(false);
       setCopyError('Could not copy. Reveal the password and copy it manually.');
-      setTimeout(() => setCopyError(''), 4000);
+      feedbackTimer.current = setTimeout(() => setCopyError(''), 4000);
       return;
     }
     setCopyError('');
     setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    feedbackTimer.current = setTimeout(() => setCopied(false), 1500);
   };
 
   const handleDelete = async () => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
 import { MfaSetupForm } from '../components/MfaSetupForm';
@@ -6,6 +6,38 @@ import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
 import { clearEncryptionKey } from '../keyStore';
+
+/**
+ * Tracks whether an element actually overflows horizontally.
+ *
+ * A scrollable region has to be focusable so a keyboard user can scroll it, but
+ * making it focusable unconditionally leaves a tab stop with nothing to scroll
+ * on every screen where the content already fits — which, since the rows stack
+ * on narrow screens, is the common case.
+ */
+function useIsScrollable(): [React.RefObject<HTMLDivElement | null>, boolean] {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const [scrollable, setScrollable] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const measure = () => setScrollable(el.scrollWidth > el.clientWidth);
+    measure();
+
+    // Observe the content as well as the container. The wrapper is always full
+    // width, so it never resizes when the table inside it grows — watching only
+    // the wrapper misses exactly the case this exists to detect.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  });
+
+  return [ref, scrollable];
+}
 
 function CreatePasswordForm({
   encryptVaultItem,
@@ -131,6 +163,7 @@ export function PasswordsPage({
   redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
+  const [tableWrapRef, tableScrollable] = useIsScrollable();
   const [passwordsError, setPasswordsError] = useState('');
   const [deleteError, setDeleteError] = useState('');
   const [userEmail, setUserEmail] = useState('');
@@ -273,7 +306,13 @@ export function PasswordsPage({
         // Wrapper scrolls instead of the page: a vault entry can hold a long
         // site name or password, and a table that overflows the viewport would
         // otherwise push the whole layout sideways.
-        <div className="table-wrap" tabIndex={0} role="region" aria-label="Saved passwords">
+        <div
+          className="table-wrap"
+          ref={tableWrapRef}
+          tabIndex={tableScrollable ? 0 : undefined}
+          role={tableScrollable ? 'region' : undefined}
+          aria-label={tableScrollable ? 'Saved passwords' : undefined}
+        >
           <table className="vault-table">
             <thead>
               <tr>
