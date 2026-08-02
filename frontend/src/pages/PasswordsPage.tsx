@@ -273,7 +273,7 @@ export function PasswordsPage({
         // Wrapper scrolls instead of the page: a vault entry can hold a long
         // site name or password, and a table that overflows the viewport would
         // otherwise push the whole layout sideways.
-        <div className="table-wrap">
+        <div className="table-wrap" tabIndex={0} role="region" aria-label="Saved passwords">
           <table className="vault-table">
             <thead>
               <tr>

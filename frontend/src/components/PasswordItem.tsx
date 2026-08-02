@@ -31,6 +31,7 @@ export function PasswordItem({
 }) {
   const [revealed, setRevealed] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [copyError, setCopyError] = useState('');
   const [editing, setEditing] = useState(false);
   const [editSiteName, setEditSiteName] = useState(item.siteName);
   const [editUsername, setEditUsername] = useState(item.username);
@@ -38,7 +39,19 @@ export function PasswordItem({
   const [editError, setEditError] = useState('');
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(item.password);
+    // A rejected clipboard write used to escape as an unhandled rejection and
+    // leave the icon unchanged, so the user believed the password was copied
+    // and pasted whatever was on the clipboard before. Denied permission and
+    // "document is not focused" are both routine, so the failure has to be
+    // shown rather than swallowed.
+    try {
+      await navigator.clipboard.writeText(item.password);
+    } catch {
+      setCopyError('Could not copy. Reveal the password and copy it manually.');
+      setTimeout(() => setCopyError(''), 4000);
+      return;
+    }
+    setCopyError('');
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
@@ -145,9 +158,13 @@ export function PasswordItem({
 
   return (
     <tr>
-      <td className="cell-site">{item.siteName}</td>
-      <td>{item.username}</td>
-      <td className="cell-secret">{revealed ? item.password : '••••••••'}</td>
+      <td className="cell-site" data-label="Site">
+        {item.siteName}
+      </td>
+      <td data-label="Username">{item.username}</td>
+      <td className="cell-secret" data-label="Password">
+        {revealed ? item.password : '••••••••'}
+      </td>
       <td className="cell-actions">
         <div className="icon-row">
           <IconButton
@@ -166,6 +183,7 @@ export function PasswordItem({
             <TrashIcon />
           </IconButton>
         </div>
+        {copyError && <p className="error">{copyError}</p>}
       </td>
     </tr>
   );

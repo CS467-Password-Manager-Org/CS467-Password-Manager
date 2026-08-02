@@ -108,32 +108,36 @@ describe('App routing', () => {
     visit('/');
   });
 
-  it('shows the home page at the root URL rather than Page Not Found', () => {
+  it('shows the home page at the root URL rather than Page Not Found', async () => {
     // The reported bug: opening the site at / rendered the 404 page, so the
     // app looked broken before a user could reach either entry point.
     visit('/');
 
     render(<App />);
 
-    expect(screen.getByRole('heading', { name: 'Secure Password Manager' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Secure Password Manager' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Page Not Found')).not.toBeInTheDocument();
   });
 
-  it('still shows Page Not Found for a route that does not exist', () => {
+  it('still shows Page Not Found for a route that does not exist', async () => {
     visit('/no-such-page');
 
     render(<App />);
 
-    expect(screen.getByText('Page Not Found')).toBeInTheDocument();
+    expect(await screen.findByText('Page Not Found')).toBeInTheDocument();
   });
 
-  it('offers a way back home from Page Not Found', () => {
+  it('offers a way back home from Page Not Found', async () => {
     visit('/no-such-page');
 
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: 'Go to the home page' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Go to the home page' }));
 
     expect(window.location.pathname).toBe('/');
-    expect(screen.getByRole('heading', { name: 'Secure Password Manager' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { name: 'Secure Password Manager' }),
+    ).toBeInTheDocument();
   });
 });

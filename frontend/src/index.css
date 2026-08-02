@@ -32,8 +32,13 @@
     --surface: #1d1f27;
     --surface-alt: #23262f;
     --border: #303442;
-    --accent: #8b6fff;
-    --accent-hover: #9c85ff;
+    /* Light lavender with near-black text, rather than the light-mode purple
+       with white text: white on a mid purple only reaches 3.61:1 here, below
+       the 4.5:1 WCAG AA needs for button text at this size. Inverting the pair
+       keeps the accent readable without washing the button out. */
+    --accent: #b5a1ff;
+    --accent-hover: #c9baff;
+    --accent-contrast: #16171d;
     --danger: #ff7a8a;
     --shadow:
       0 1px 2px rgb(0 0 0 / 30%),

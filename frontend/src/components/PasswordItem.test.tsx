@@ -74,6 +74,20 @@ describe('PasswordItem', () => {
     expect(await screen.findByRole('button', { name: 'Copied!' })).toBeInTheDocument();
   });
 
+  it('tells the user when the clipboard write is refused instead of looking successful', async () => {
+    // A denied clipboard is routine — an unfocused document is enough. Silently
+    // doing nothing would leave the user pasting whatever they copied earlier.
+    Object.assign(navigator, {
+      clipboard: { writeText: vi.fn().mockRejectedValue(new Error('Write permission denied')) },
+    });
+    renderPasswordItem();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Copy password' }));
+
+    expect(await screen.findByText(/Could not copy/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Copied!' })).not.toBeInTheDocument();
+  });
+
   it('asks for confirmation and calls onDelete with the item id when confirmed', async () => {
     const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const props = renderPasswordItem();

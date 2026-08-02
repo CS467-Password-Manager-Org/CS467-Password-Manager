@@ -26,8 +26,13 @@
   margin: 0 auto;
 }
 
-.card + .card {
-  margin-top: 1.25rem;
+/* Vertical rhythm on the blocks themselves. This used to be `.card + .card`,
+   which never matched: the table or the empty state always sits between the two
+   cards on the vault page, so the panels ended up flush against each other. */
+.card,
+.table-wrap,
+.empty-state {
+  margin-block: 1.25rem;
 }
 
 /* Label above input. Left-aligned inside an otherwise centred page, because a
@@ -90,7 +95,6 @@ form {
 /* Vault table. One row per entry, so entries line up column by column and stay
    scannable as the list grows — which a grid of cards does not. */
 .table-wrap {
-  margin: 1.5rem 0;
   overflow-x: auto;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -215,4 +219,84 @@ form {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow-wrap: anywhere;
+}
+
+/* Below this width four columns cannot fit, and a horizontally scrolled table
+   pushed the action buttons off-screen entirely — on a phone the reveal, copy,
+   edit and delete controls were unreachable without dragging the table
+   sideways. Each row becomes its own stacked block instead, so every control is
+   visible and nothing scrolls horizontally. The markup stays a real table for
+   wider screens and for assistive technology. */
+@media (max-width: 640px) {
+  .table-wrap {
+    overflow-x: visible;
+  }
+
+  /* The header is redundant once each cell carries its own label, but it stays
+     in the accessibility tree rather than being removed. */
+  .vault-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .vault-table,
+  .vault-table tbody,
+  .vault-table tr,
+  .vault-table td {
+    display: block;
+    width: auto;
+  }
+
+  .vault-table tbody tr {
+    padding: 0.9rem 1rem;
+  }
+
+  .vault-table tbody tr + tr {
+    border-top: 1px solid var(--border);
+  }
+
+  .vault-table tbody tr + tr td {
+    border-top: none;
+  }
+
+  .vault-table td {
+    padding: 0.15rem 0;
+  }
+
+  /* Replaces the column header for each stacked cell. Generated content, so it
+     never appears in the DOM the tests query. */
+  .vault-table td::before {
+    display: block;
+    font-size: 0.7em;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    content: attr(data-label);
+  }
+
+  .cell-actions {
+    width: auto;
+    text-align: left;
+  }
+
+  .cell-actions::before {
+    display: none;
+  }
+
+  .icon-row {
+    justify-content: flex-start;
+    margin-top: 0.4rem;
+  }
+
+  .password-item td {
+    padding: 0.5rem 0;
+  }
+
+  .password-item td::before {
+    display: none;
+  }
 }
