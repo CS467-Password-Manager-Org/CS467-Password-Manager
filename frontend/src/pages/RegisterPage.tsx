@@ -57,31 +57,44 @@ export function RegisterPage({
   };
 
   return (
-    <div>
-      <h2>Register a new account</h2>
+    <div className="card card-narrow">
+      <h2>Create your account</h2>
 
       <form>
-        <h3>Enter your email address</h3>
-        <input
-          type="text"
-          onInput={(ev) => {
-            setFormEmail(ev.currentTarget.value);
-          }}
-          value={formEmail}
-        />
+        <div className="field">
+          <label htmlFor="register-email">Enter your email address</label>
+          <input
+            id="register-email"
+            type="text"
+            autoComplete="username"
+            onInput={(ev) => {
+              setFormEmail(ev.currentTarget.value);
+            }}
+            value={formEmail}
+          />
+        </div>
 
-        <h3>Enter your new Master Password</h3>
-        <input
-          type="password"
-          onInput={(ev) => setFormPassword(ev.currentTarget.value)}
-          value={formPassword}
-        />
-        <button onClick={handleRegisterNewEmail}>Submit</button>
+        <div className="field">
+          <label htmlFor="register-password">Enter your new Master Password</label>
+          <input
+            id="register-password"
+            type="password"
+            autoComplete="new-password"
+            onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+            value={formPassword}
+          />
+        </div>
+
+        <div className="actions">
+          <button className="primary" onClick={handleRegisterNewEmail}>
+            Submit
+          </button>
+        </div>
       </form>
 
       {registerError && (
         <div>
-          <p>Error: {registerError}</p>
+          <p className="error">Error: {registerError}</p>
         </div>
       )}
     </div>

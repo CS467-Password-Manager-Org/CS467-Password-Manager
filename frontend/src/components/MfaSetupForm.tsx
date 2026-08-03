@@ -69,16 +69,20 @@ export function MfaSetupForm({
 
   if (!enrollData) {
     return (
-      <section>
+      <section className="card">
         <h3>Multi-Factor Authentication</h3>
-        <p>Add an extra layer of security to your account with an authenticator app.</p>
-        <button type="button" onClick={handleStartEnrollment}>
-          Set up MFA
-        </button>
+        <p className="muted">
+          Add an extra layer of security to your account with an authenticator app.
+        </p>
+        <div className="actions">
+          <button type="button" onClick={handleStartEnrollment}>
+            Set up MFA
+          </button>
+        </div>
 
         {enrollError && (
           <div>
-            <p>Error: {enrollError}</p>
+            <p className="error">Error: {enrollError}</p>
           </div>
         )}
       </section>
@@ -86,35 +90,43 @@ export function MfaSetupForm({
   }
 
   return (
-    <section>
+    <section className="card">
       <h3>Set up Multi-Factor Authentication</h3>
-      <p>Scan this QR code with your authenticator app:</p>
-      {qrCodeDataUrl && <img src={qrCodeDataUrl} alt="MFA QR code" />}
+      <p className="muted">Scan this QR code with your authenticator app:</p>
+      {qrCodeDataUrl && <img className="mfa-qr" src={qrCodeDataUrl} alt="MFA QR code" />}
 
-      <p>Or enter this key manually:</p>
+      <p className="muted">Or enter this key manually:</p>
       <p>
-        <code>{enrollData.secret}</code>
+        <code className="secret-key">{enrollData.secret}</code>
       </p>
 
       <form>
-        <input
-          type="text"
-          inputMode="numeric"
-          maxLength={6}
-          autoComplete="one-time-code"
-          placeholder="6-digit code"
-          onInput={(ev) => setCode(ev.currentTarget.value)}
-          value={code}
-        />
-        <button onClick={handleActivate}>Activate</button>
-        <button type="button" onClick={handleCancel}>
-          Cancel
-        </button>
+        <div className="field card-narrow">
+          <label htmlFor="mfa-activation-code">Enter the code from your app</label>
+          <input
+            id="mfa-activation-code"
+            type="text"
+            inputMode="numeric"
+            maxLength={6}
+            autoComplete="one-time-code"
+            placeholder="6-digit code"
+            onInput={(ev) => setCode(ev.currentTarget.value)}
+            value={code}
+          />
+        </div>
+        <div className="actions">
+          <button className="primary" onClick={handleActivate}>
+            Activate
+          </button>
+          <button type="button" onClick={handleCancel}>
+            Cancel
+          </button>
+        </div>
       </form>
 
       {activateError && (
         <div>
-          <p>Error: {activateError}</p>
+          <p className="error">Error: {activateError}</p>
         </div>
       )}
     </section>

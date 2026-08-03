@@ -17,11 +17,13 @@ import { base64ToBytes, bytesToBase64, type DerivedKeys } from '@app/crypto';
 export function LoginPage({
   fetchUserSalt,
   deriveKeys,
+  persistEncryptionKey,
   login,
   redirect,
 }: {
   fetchUserSalt: (email: string) => Promise<ServerResponse<SaltResponse | null>>;
   deriveKeys: (masterPassword: string, salt: Uint8Array) => Promise<DerivedKeys>;
+  persistEncryptionKey: (key: CryptoKey) => Promise<void>;
   login: (email: string, authKey: string, code?: string) => Promise<LoginResult>;
   redirect: (newPath: string) => void;
 }) {
@@ -33,6 +35,9 @@ export function LoginPage({
   const [loginError, setLoginError] = useState('');
 
   const [authKey, setAuthKey] = useState('');
+  // Held so the MFA step can persist it once the second factor succeeds. The
+  // key is only ever written to storage after the server issues a token.
+  const [derivedKey, setDerivedKey] = useState<CryptoKey | null>(null);
   const [mfaRequired, setMfaRequired] = useState(false);
   const [formMfaCode, setFormMfaCode] = useState('');
   const [mfaError, setMfaError] = useState('');
@@ -67,9 +72,10 @@ export function LoginPage({
     }
 
     try {
-      const { authKey } = await deriveKeys(formPassword, userSalt);
+      const { authKey, encryptionKey } = await deriveKeys(formPassword, userSalt);
       const authKeyBase64 = bytesToBase64(authKey);
       setAuthKey(authKeyBase64);
+      setDerivedKey(encryptionKey);
 
       const { data, publicErrorMessage, mfaRequired } = await login(formEmail, authKeyBase64);
       if (mfaRequired) {
@@ -85,6 +91,8 @@ export function LoginPage({
       // TODO: store in sessionStorage for now, not secure. We probably want to
       // move to a cookie.
       sessionStorage.setItem('token', data.token);
+      // Only now, with a token in hand, does the key earn a place on disk.
+      await persistEncryptionKey(encryptionKey);
 
       redirect('/passwords');
     } catch (e) {
@@ -112,6 +120,11 @@ export function LoginPage({
       // TODO: store in sessionStorage for now, not secure. We probably want to
       // move to a cookie.
       sessionStorage.setItem('token', data.token);
+      // The second factor has now passed, so the key derived at the password
+      // step is finally allowed to persist.
+      if (derivedKey) {
+        await persistEncryptionKey(derivedKey);
+      }
 
       redirect('/passwords');
     } catch (e) {
@@ -121,65 +134,89 @@ export function LoginPage({
   };
 
   return (
-    <div>
-      <h2>Login Page</h2>
+    <div className="card card-narrow">
+      <h2>Sign in</h2>
 
       {!userSalt ? (
         <>
-          <h3>Enter your Email Address</h3>
           <form>
-            <input
-              type="text"
-              onInput={(ev) => {
-                setFormEmail(ev.currentTarget.value);
-              }}
-              value={formEmail}
-            />
-            <button onClick={handleFetchUserSalt}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-email">Enter your Email Address</label>
+              <input
+                id="login-email"
+                type="text"
+                autoComplete="username"
+                onInput={(ev) => {
+                  setFormEmail(ev.currentTarget.value);
+                }}
+                value={formEmail}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleFetchUserSalt}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {fetchUserSaltError && (
             <div>
-              <p>Error: {fetchUserSaltError}</p>
+              <p className="error">Error: {fetchUserSaltError}</p>
             </div>
           )}
         </>
       ) : mfaRequired ? (
         <>
-          <h3>Enter your Authentication Code</h3>
           <form>
-            <input
-              type="text"
-              inputMode="numeric"
-              maxLength={6}
-              placeholder="6-digit code"
-              onInput={(ev) => setFormMfaCode(ev.currentTarget.value)}
-              value={formMfaCode}
-            />
-            <button onClick={handleSubmitMfaCode}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-mfa-code">Enter your Authentication Code</label>
+              <input
+                id="login-mfa-code"
+                type="text"
+                inputMode="numeric"
+                maxLength={6}
+                autoComplete="one-time-code"
+                placeholder="6-digit code"
+                onInput={(ev) => setFormMfaCode(ev.currentTarget.value)}
+                value={formMfaCode}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleSubmitMfaCode}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {mfaError && (
             <div>
-              <p>Error: {mfaError}</p>
+              <p className="error">Error: {mfaError}</p>
             </div>
           )}
         </>
       ) : (
         <>
-          <h3>Enter your Master Password</h3>
           <form>
-            <input
-              type="password"
-              onInput={(ev) => setFormPassword(ev.currentTarget.value)}
-              value={formPassword}
-            />
-            <button onClick={handleGenerateAuthKeyAndLogin}>Submit</button>
+            <div className="field">
+              <label htmlFor="login-password">Enter your Master Password</label>
+              <input
+                id="login-password"
+                type="password"
+                autoComplete="current-password"
+                onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+                value={formPassword}
+              />
+            </div>
+            <div className="actions">
+              <button className="primary" onClick={handleGenerateAuthKeyAndLogin}>
+                Submit
+              </button>
+            </div>
           </form>
 
           {loginError && (
             <div>
-              <p>Error: {loginError}</p>
+              <p className="error">Error: {loginError}</p>
             </div>
           )}
         </>
