@@ -1,4 +1,4 @@
-import { useState, useId } from 'react';
+import { useState, useId, useMemo } from 'react';
 import type { PasswordStrength } from '@app/crypto';
 import { evaluatePasswordStrength } from '@app/crypto';
 import './PasswordStrengthInput.css';
@@ -17,7 +17,14 @@ export function PasswordStrengthInput({
   const [showPassword, setShowPassword] = useState(false);
   const inputId = useId();
 
-  const analysis: PasswordStrength = evaluatePasswordStrength(value, userInputs);
+  // userInputs=[] is a fresh array every render, so key the memo on its contents instead of the array reference.
+  const userInputsKey = JSON.stringify(userInputs);
+  // oxlint-disable react-hooks/exhaustive-deps -- see comment above
+  const analysis: PasswordStrength = useMemo(
+    () => evaluatePasswordStrength(value, userInputs),
+    [value, userInputsKey],
+  );
+  // oxlint-enable react-hooks/exhaustive-deps
 
   return (
     <div>
