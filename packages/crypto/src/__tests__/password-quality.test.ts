@@ -168,11 +168,11 @@ describe("evaluatePasswordStrength", () => {
     expect(result.label).toMatch(/Strong/);
   });
 
-  it("penalizes a password that merely contains a fragment of a user input (substring match, not equality)", () => {
-    const password = "alice2000xyz!";
+  it("penalizes a password built from just the local part of an email, not only a full match", () => {
+    const password = "kaelin82xyz!";
     const withoutContext = evaluatePasswordStrength(password);
-    const withContext = evaluatePasswordStrength(password, ["alice2000@example.com"]);
-    expect(withContext.score).toBeLessThanOrEqual(withoutContext.score);
+    const withContext = evaluatePasswordStrength(password, ["kaelin82@example.com"]);
+    expect(withContext.score).toBeLessThan(withoutContext.score);
   });
 
   it("has no feedback once the password is strong", () => {

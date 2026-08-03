@@ -445,12 +445,18 @@ export interface PasswordStrength {
 }
 
 /**
- * Scores a candidate password with zxcvbn (pattern/dictionary-based, unlike the
- * length/class rules generateSuggestedPassword enforces).
- *
- * userInputs (e.g. the email typed into the same form) are added as an extra dictionary:
- * any password that contains a piece of one of these strings is scored as a trivial guess for that piece. 
- * It's a substring/token match, not equality — "alice2000xyz!" is still penalized against userInputs=["alice2000@example.com"] even though the two aren't equal.
+ * Splits the local part of a user-supplied context string (up to the first "@") into pieces, e.g. "alice.smith" -> ["alice", "smith"].
+ * zxcvbn treats each userInputs entry as one opaque dictionary word, so without this a password built from just part of a name goes unpenalized.
+ * The domain is dropped: it isn't personal (many people share "gmail.com"), and its short fragments ("com", "co") would flag unrelated passwords.
+ */
+function tokenizeUserInput(input: string): string[] {
+  const localPart = input.split("@")[0] ?? input;
+  return localPart.split(/[^a-z0-9]+/i).filter((token) => token.length > 0);
+}
+
+/**
+ * Scores a candidate password with zxcvbn (pattern/dictionary-based, unlike the length/class rules generateSuggestedPassword enforces).
+ * userInputs (e.g. the email typed into the same form) are added as an extra dictionary, tokenized piece and all — see tokenizeUserInput.
  */
 export function evaluatePasswordStrength(
   password: string,
@@ -465,7 +471,8 @@ export function evaluatePasswordStrength(
     };
   }
 
-  const result = zxcvbn(password, [...userInputs]);
+  const zxcvbnInputs = userInputs.flatMap((input) => [input, ...tokenizeUserInput(input)]);
+  const result = zxcvbn(password, zxcvbnInputs);
   const feedback: string[] = [];
   if (result.feedback.warning) {
     feedback.push(result.feedback.warning);
