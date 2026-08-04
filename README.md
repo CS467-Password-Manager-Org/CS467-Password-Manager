@@ -23,9 +23,24 @@ docker compose up                                                    # productio
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up    # dev, opt-in
 ```
 
-A plain `docker compose up` builds the API as a compiled production image with no watchers; the frontend still runs its Vite dev server. Pass both `-f` flags above to get the API dev target with source mounted and hot reload.
+A plain `docker compose up` builds both app images as production: the API is compiled TypeScript run by Node, and the frontend is a static Vite bundle served by nginx. Neither has watchers, source mounts, or dev dependencies. Pass both `-f` flags above to get the dev targets instead — the API under `tsx watch` and the frontend on the Vite dev server with hot reload, both with source mounted.
+
+In production the frontend container also reverse-proxies `/api` to the API container, so the browser talks to a single origin and the bundle contains no hardcoded API URL. `http://localhost:5173/api/health` therefore works too, and the API stays reachable directly on `http://localhost:5001` for the curl runbook.
 
 Shared frontend/backend types live in `packages/shared`.
+
+### Deploying to Azure
+
+The stack runs on Azure Container Apps in `rg-pwmgr-dev`: `ca-pwmgr-web-dev-001` (nginx + bundle) and `ca-pwmgr-api-dev-001` (API), against the `psql-pwmgr-dev-1ce74e` flexible server. Images are built in the registry rather than locally, which avoids cross-compiling for `linux/amd64` from an Apple Silicon machine:
+
+```bash
+az acr build --registry crpwmgrdev1ce74e --image pwmgr-web:v2 \
+  --file frontend/Dockerfile --target prod --platform linux/amd64 .
+az containerapp update -n ca-pwmgr-web-dev-001 -g rg-pwmgr-dev \
+  --image crpwmgrdev1ce74e.azurecr.io/pwmgr-web:v2
+```
+
+The same image serves both environments; only `API_UPSTREAM` differs. It defaults to the Compose service (`http://api:5000`) and is set on the deployed app to the API's public FQDN, because a bare container app name only resolves for apps with internal ingress. If the API's URL ever changes, update that variable and the API's own `FRONTEND_ORIGIN` — nothing is baked into the bundle.
 
 ## Backend and API
 

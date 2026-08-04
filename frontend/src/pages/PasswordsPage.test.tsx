@@ -90,8 +90,9 @@ describe('PasswordsPage', () => {
     });
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
-    expect(screen.getByText('Username: someone')).toBeInTheDocument();
-    expect(screen.getByText(/Password:/)).toBeInTheDocument();
+    expect(screen.getByText('someone')).toBeInTheDocument();
+    // The password column renders masked until it is explicitly revealed.
+    expect(screen.getByText('••••••••')).toBeInTheDocument();
     expect(screen.queryByText(/plaintext/)).not.toBeInTheDocument();
     expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
@@ -295,7 +296,7 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
 
     await waitFor(() => expect(props.deleteVaultItem).toHaveBeenCalledWith('item-1'));
     await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalledTimes(2));
@@ -317,7 +318,7 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
 
     expect(props.deleteVaultItem).not.toHaveBeenCalled();
     expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
@@ -342,7 +343,7 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Delete'));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete entry' }));
 
     expect(await screen.findByText('Error: Error deleting password.')).toBeInTheDocument();
     expect(screen.getByText('Email')).toBeInTheDocument();
@@ -364,7 +365,7 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     const editForm = within(document.querySelector('.password-item form')!);
     fireEvent.input(editForm.getByPlaceholderText('Site name'), { target: { value: 'New Site' } });
     fireEvent.input(editForm.getByPlaceholderText('Username'), { target: { value: 'newuser' } });
@@ -417,7 +418,7 @@ describe('PasswordsPage', () => {
 
     expect(await screen.findByText('Email')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('Edit'));
+    fireEvent.click(screen.getByRole('button', { name: 'Edit entry' }));
     const editForm = within(document.querySelector('.password-item form')!);
     fireEvent.click(editForm.getByText('Save'));
 

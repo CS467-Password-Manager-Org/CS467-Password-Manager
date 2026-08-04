@@ -1,6 +1,10 @@
 # Opt in with:
 #   docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 #
+# Builds the dev target of both app images — the API with tsx watching, the
+# frontend with the Vite dev server and HMR — and mounts source over them. The
+# base file builds both as production images instead.
+#
 # This file must NOT be renamed to docker-compose.override.yml — Compose
 # auto-merges that filename on a plain `up`, which would silently make the
 # default path dev-with-watchers and break OPS-03 with no visible error and
@@ -10,21 +14,29 @@ services:
   api:
     build:
       target: dev
-    environment:
-      # The Vite dev server proxies /api to this container, so the API sees the
-      # proxy rather than the browser. One hop, paired with xfwd: true in
-      # frontend/vite.config.ts, restores per-client rate-limit buckets. Base
-      # compose leaves this unset (trust nobody), which is correct when the
-      # browser reaches the API directly.
-      TRUST_PROXY_HOPS: 1
+    # Distinct tag from the prod image, so neither target can overwrite the
+    # other and `docker compose up` without --build can never start this one.
+    image: cs467-password-manager-api:dev
+    # No node_modules volume. The dependency tree lives at /app/node_modules and
+    # nothing below mounts over it, so a named volume there protected nothing —
+    # it only froze a copy of the image's modules the first time the container
+    # ran and then shadowed every later rebuild. That is what broke `tsx: not
+    # found` after a lockfile change, and it is why this file kept renaming the
+    # volume (v2, v3, ...) instead of fixing the cause. The image is the source
+    # of truth; only source is mounted.
     volumes:
       - ./api:/app/api
       - ./packages/shared:/app/packages/shared
-      # Renamed from api-node-modules-v2 so a pre-existing volume from the old
-      # dev-only image can never mount over the new image's node_modules.
-      # Renaming makes the stale volume unreachable by name, which is more
-      # reliable than documenting a `down -v` step and hoping everyone runs it.
-      - api-node-modules-v3:/app/node_modules
 
-volumes:
-  api-node-modules-v3:
+  frontend:
+    build:
+      target: dev
+    image: cs467-password-manager-frontend:dev
+    volumes:
+      - ./frontend:/app/frontend
+      - ./packages/shared:/app/packages/shared
+      - ./packages/crypto:/app/packages/crypto
+    # The prod image healthchecks nginx; the Vite dev server has no equivalent
+    # and the inherited check would report unhealthy forever.
+    healthcheck:
+      disable: true

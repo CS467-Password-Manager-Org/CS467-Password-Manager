@@ -21,6 +21,11 @@ services:
       context: .
       dockerfile: api/Dockerfile
       target: prod          # OPS-03: a plain `docker compose up` is production
+    # Tagged per target. Without this, Compose names the image after the service
+    # alone, so the dev and prod targets overwrite each other under one tag and
+    # a plain `docker compose up` (no --build) silently starts whichever was
+    # built last — the dev image with watchers, breaking OPS-03 with no error.
+    image: cs467-password-manager-api:prod
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
       JWT_SECRET: ${JWT_SECRET:?missing in .env — run ./scripts/setup.sh}
@@ -32,6 +37,11 @@ services:
       AUTH_VERIFY_RATE_LIMIT_WINDOW_MS: ${AUTH_VERIFY_RATE_LIMIT_WINDOW_MS:-900000}
       AUTH_VERIFY_RATE_LIMIT_MAX_PER_ACCOUNT: ${AUTH_VERIFY_RATE_LIMIT_MAX_PER_ACCOUNT:-10}
       AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP: ${AUTH_VERIFY_RATE_LIMIT_MAX_PER_IP:-30}
+      # One hop, because the browser always reaches the API through the frontend
+      # container: nginx in prod, the Vite dev server proxy in dev. Both forward
+      # X-Forwarded-For. At 0 the API would see only the proxy's address and
+      # every user would share a single rate-limit bucket.
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:-1}
     ports:
       - "${API_PORT:-5001}:5000"
     # No volumes: the prod image is self-contained. Mounting source or a
@@ -47,16 +57,16 @@ services:
     build:
       context: .
       dockerfile: frontend/Dockerfile
+      target: prod        # OPS-03: a plain `docker compose up` is production
+    # Separate tag per target, for the same reason as api above.
+    image: cs467-password-manager-frontend:prod
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
-    volumes:
-      - ./frontend:/app/frontend
-      - ./packages/shared:/app/packages/shared
-      - ./packages/crypto:/app/packages/crypto
-      - frontend-node-modules-v2:/app/node_modules
+    # No volumes, for the same reason as api: the prod image is a static bundle
+    # behind nginx, and mounting source or a node_modules volume over it would
+    # either break the image or silently serve stale files.
     depends_on:
       - api
 
 volumes:
   db-data:
-  frontend-node-modules-v2:

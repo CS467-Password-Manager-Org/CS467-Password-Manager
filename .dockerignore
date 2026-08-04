@@ -3,3 +3,17 @@ node_modules
 dist
 **/dist
 .git
+
+# Secrets must never enter a build context. No Dockerfile copies .env, but the
+# context is uploaded whole to remote builders (az acr build, buildx), so an
+# unignored .env would leave generated JWT_SECRET and SALT_PEPPER values sitting
+# in a registry's build cache. .env.example is a placeholder and stays.
+.env
+.env.*
+!.env.example
+
+# Local-only noise. Keeping it out shrinks the upload and stops an unrelated
+# edit from busting the build cache.
+.planning
+.idea
+**/.DS_Store
