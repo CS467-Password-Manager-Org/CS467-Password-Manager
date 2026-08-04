@@ -26,6 +26,7 @@ vi.mock('./serverAPI', () => ({
   registerNewEmail: vi.fn(),
   enrollMfa: vi.fn(),
   activateMfa: vi.fn(),
+  disableMfa: vi.fn(),
 }));
 
 function visit(path: string) {

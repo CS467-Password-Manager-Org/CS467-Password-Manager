@@ -40,6 +40,7 @@ function renderPasswordsPage(overrides = {}) {
       .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
     enrollMfa: vi.fn(),
     activateMfa: vi.fn(),
+    disableMfa: vi.fn(),
     redirect: vi.fn(),
     ...overrides,
   };
@@ -386,11 +387,11 @@ describe('PasswordsPage', () => {
     const props = renderPasswordsPage();
 
     expect(await screen.findByText('Set up MFA')).toBeInTheDocument();
-    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove MFA')).not.toBeInTheDocument();
     await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
   });
 
-  it('shows MFA is enabled instead of the setup prompt when the account has MFA on', async () => {
+  it('shows a remove MFA prompt instead of the setup prompt when the account has MFA on', async () => {
     renderPasswordsPage({
       fetchMe: vi.fn().mockResolvedValue({
         data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
@@ -398,7 +399,7 @@ describe('PasswordsPage', () => {
       }),
     });
 
-    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(await screen.findByText('Remove MFA')).toBeInTheDocument();
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 
@@ -509,7 +510,7 @@ describe('PasswordsPage initial load behaviour', () => {
     renderPasswordsPage({ fetchMe: vi.fn().mockReturnValue(mePending) });
 
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
-    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove MFA')).not.toBeInTheDocument();
 
     releaseMe({
       data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
@@ -517,7 +518,7 @@ describe('PasswordsPage initial load behaviour', () => {
     });
 
     // Once known, the true state appears — and it is the enabled one.
-    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(await screen.findByText('Remove MFA')).toBeInTheDocument();
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 });
