@@ -97,6 +97,85 @@ describe('PasswordsPage', () => {
     expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
 
+  it('does not show a filter input when there are no passwords', async () => {
+    renderPasswordsPage();
+
+    expect(await screen.findByText('No passwords found.')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Filter by site or username')).not.toBeInTheDocument();
+  });
+
+  it('filters passwords by site name', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [
+          { id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' },
+          { id: 'item-2', encryptedData: 'blob-2', createdAt: '', updatedAt: '' },
+        ],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValueOnce({ siteName: 'Email', username: 'someone', password: 'plaintext' })
+        .mockResolvedValueOnce({ siteName: 'Bank', username: 'other', password: 'plaintext2' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Bank')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'ema' },
+    });
+
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.queryByText('Bank')).not.toBeInTheDocument();
+  });
+
+  it('filters passwords by username, case-insensitively', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [
+          { id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' },
+          { id: 'item-2', encryptedData: 'blob-2', createdAt: '', updatedAt: '' },
+        ],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValueOnce({ siteName: 'Email', username: 'someone', password: 'plaintext' })
+        .mockResolvedValueOnce({ siteName: 'Bank', username: 'other', password: 'plaintext2' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'SOMEONE' },
+    });
+
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.queryByText('Bank')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-match message when the filter matches nothing', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'nonexistent' },
+    });
+
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.getByText('No passwords match your filter.')).toBeInTheDocument();
+  });
+
   it('shows an error message when fetching vault items fails', async () => {
     const decryptVaultItem = vi.fn();
     renderPasswordsPage({
