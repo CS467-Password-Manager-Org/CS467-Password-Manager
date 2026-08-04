@@ -264,6 +264,52 @@ export async function fetchMe(): Promise<ServerResponse<MeResponse | null>> {
   }
 }
 
+const DEFAULT_LOGOUT_ERROR = 'Error logging out.';
+
+// Tells the server to revoke the current token (added to its blocklist) so it
+// cannot be replayed after logout, even though its JWT signature is still
+// valid until expiry. The caller is still responsible for clearing the token
+// from sessionStorage — this only handles the server side.
+export async function logout(): Promise<ServerResponse<null>> {
+  const url = '/api/v1/auth/logout';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: '',
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      console.error(response);
+      return {
+        data: null,
+        publicErrorMessage: DEFAULT_LOGOUT_ERROR,
+      };
+    }
+
+    return {
+      data: null,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_LOGOUT_ERROR,
+    };
+  }
+}
+
 const DEFAULT_VAULT_ITEMS_ERROR = 'Error fetching passwords.';
 
 export async function fetchVaultItems(): Promise<ServerResponse<VaultItem[] | null>> {

@@ -19,6 +19,7 @@ import {
   fetchVaultItems,
   fetchUserSalt,
   login,
+  logout,
   registerNewEmail,
   updateVaultItem,
 } from './serverAPI';
@@ -136,6 +137,7 @@ function Routes() {
           fetchMe={fetchMe}
           enrollMfa={enrollMfa}
           activateMfa={activateMfa}
+          logout={logout}
           redirect={redirect}
         />
       );

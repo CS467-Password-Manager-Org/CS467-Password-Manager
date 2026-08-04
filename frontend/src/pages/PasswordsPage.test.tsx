@@ -40,6 +40,7 @@ function renderPasswordsPage(overrides = {}) {
       .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
     enrollMfa: vi.fn(),
     activateMfa: vi.fn(),
+    logout: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
     redirect: vi.fn(),
     ...overrides,
   };
@@ -350,6 +351,35 @@ describe('PasswordsPage', () => {
     expect(props.fetchVaultItems).toHaveBeenCalledTimes(1);
 
     confirmSpy.mockRestore();
+  });
+
+  it('logs out, clears the token and encryption key, and redirects to login', async () => {
+    sessionStorage.setItem('token', 'a-token');
+    const props = renderPasswordsPage();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+
+    await waitFor(() => expect(props.logout).toHaveBeenCalled());
+    expect(sessionStorage.getItem('token')).toBeNull();
+    expect(clearEncryptionKey).toHaveBeenCalled();
+    expect(props.redirect).toHaveBeenCalledWith('/login');
+  });
+
+  it('shows an error and keeps the session when logout fails', async () => {
+    sessionStorage.setItem('token', 'a-token');
+    vi.mocked(clearEncryptionKey).mockClear();
+    const props = renderPasswordsPage({
+      logout: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error logging out.' }),
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
+
+    expect(await screen.findByText('Error: Error logging out.')).toBeInTheDocument();
+    expect(sessionStorage.getItem('token')).toBe('a-token');
+    expect(clearEncryptionKey).not.toHaveBeenCalled();
+    expect(props.redirect).not.toHaveBeenCalled();
+
+    sessionStorage.removeItem('token');
   });
 
   it('encrypts and saves changes when editing a password entry', async () => {

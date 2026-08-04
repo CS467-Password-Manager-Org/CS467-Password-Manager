@@ -148,6 +148,7 @@ export function PasswordsPage({
   fetchMe,
   enrollMfa,
   activateMfa,
+  logout,
   redirect,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
@@ -160,12 +161,14 @@ export function PasswordsPage({
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
   enrollMfa: () => Promise<ServerResponse<MfaEnrollResponse | null>>;
   activateMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
+  logout: () => Promise<ServerResponse<null>>;
   redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
   const [tableWrapRef, tableScrollable] = useIsScrollable();
   const [passwordsError, setPasswordsError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [logoutError, setLogoutError] = useState('');
   const [userEmail, setUserEmail] = useState('');
   // Tri-state: null means "not known yet". Defaulting to false made the page
   // claim MFA was off before /me answered, so a user who has MFA enabled was
@@ -218,6 +221,23 @@ export function PasswordsPage({
     if (encryptionKey) {
       await loadPasswords(encryptionKey);
     }
+  };
+
+  const handleLogout = async () => {
+    setLogoutError('');
+
+    // Revoke the token server-side first. If that fails, leave the token in
+    // place and let the user retry — clearing it locally regardless would
+    // strand them signed in on the server with no way to log back out.
+    const { publicErrorMessage } = await logout();
+    if (publicErrorMessage) {
+      setLogoutError(publicErrorMessage);
+      return;
+    }
+
+    sessionStorage.removeItem('token');
+    await clearEncryptionKey();
+    redirect('/login');
   };
 
   const handleEdit = async (
@@ -286,8 +306,14 @@ export function PasswordsPage({
 
   return (
     <div>
-      <h2>Passwords</h2>
+      <div className="page-header">
+        <h2>Passwords</h2>
+        <button type="button" onClick={handleLogout}>
+          Log out
+        </button>
+      </div>
       {userEmail && <p className="muted">Logged in as {userEmail}</p>}
+      {logoutError && <p className="error">Error: {logoutError}</p>}
 
       {mfaEnabled === null ? null : mfaEnabled ? (
         <p className="muted">Multi-factor authentication is enabled.</p>

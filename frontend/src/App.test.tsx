@@ -23,6 +23,7 @@ vi.mock('./serverAPI', () => ({
   deleteVaultItem: vi.fn(),
   fetchUserSalt: vi.fn(),
   login: vi.fn(),
+  logout: vi.fn(),
   registerNewEmail: vi.fn(),
   enrollMfa: vi.fn(),
   activateMfa: vi.fn(),
