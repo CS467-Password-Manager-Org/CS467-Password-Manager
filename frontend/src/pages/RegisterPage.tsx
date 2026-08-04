@@ -76,18 +76,13 @@ export function RegisterPage({
         </div>
 
         <div className="field">
-          <label htmlFor="register-password">Enter your new Master Password</label>
-          <input
-            id="register-password"
-            type="password"
-            autoComplete="new-password"
-            onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+          <PasswordStrengthInput
             value={formPassword}
+            onChange={setFormPassword}
+            userInputs={[formEmail]}
+            label="Enter your new Master Password"
           />
         </div>
-
-        <h3>Enter your new Master Password</h3>
-        <PasswordStrengthInput value={formPassword} onChange={setFormPassword} userInputs={[formEmail]} />
         <div className="actions">
           <button className="primary" onClick={handleRegisterNewEmail}>
             Submit

@@ -7,12 +7,14 @@ interface PasswordStrengthInputProps {
   value: string;
   onChange: (value: string) => void;
   userInputs?: string[];
+  label?: string;
 }
 
 export function PasswordStrengthInput({
   value,
   onChange,
   userInputs = [],
+  label = 'Password',
 }: PasswordStrengthInputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const inputId = useId();
@@ -27,13 +29,14 @@ export function PasswordStrengthInput({
   // oxlint-enable react-hooks/exhaustive-deps
 
   return (
-    <div>
-      <label htmlFor={inputId}>Password</label>
+    <>
+      <label htmlFor={inputId}>{label}</label>
 
       <div>
         <input
           id={inputId}
           type={showPassword ? 'text' : 'password'}
+          autoComplete="new-password"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Enter password..."
@@ -75,6 +78,6 @@ export function PasswordStrengthInput({
           )}
         </div>
       )}
-    </div>
+    </>
   );
 }
