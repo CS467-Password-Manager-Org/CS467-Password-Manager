@@ -10,6 +10,7 @@
  */
 
 import { argon2id } from "hash-wasm";
+import zxcvbn from "zxcvbn";
 
 import { COMMON_PASSWORDS } from "./common-passwords.js";
 
@@ -421,4 +422,67 @@ export function isReusedPassword(
   decryptedItems: readonly VaultItemSecret[],
 ): boolean {
   return decryptedItems.some((item) => item.password === password);
+}
+
+/** zxcvbn's 0-4 strength score */
+export type PasswordStrengthScore = 0 | 1 | 2 | 3 | 4;
+
+const STRENGTH_LABELS: Record<PasswordStrengthScore, string> = {
+  0: "Very Weak",
+  1: "Weak",
+  2: "Fair",
+  3: "Strong",
+  4: "Very Strong",
+};
+
+export interface PasswordStrength {
+  score: PasswordStrengthScore;
+  label: string;
+  /** Warning plus suggestions for improving the password; empty once it's strong enough. */
+  feedback: string[];
+  /** Human-readable estimate (e.g. "3 hours") assuming a slow offline hash. */
+  crackTimeDisplay: string;
+}
+
+/**
+ * Splits the local part of a user-supplied context string (up to the first "@") into pieces, e.g. "alice.smith" -> ["alice", "smith"].
+ * zxcvbn treats each userInputs entry as one opaque dictionary word, so without this a password built from just part of a name goes unpenalized.
+ * The domain is dropped: it isn't personal (many people share "gmail.com"), and its short fragments ("com", "co") would flag unrelated passwords.
+ */
+function tokenizeUserInput(input: string): string[] {
+  const localPart = input.split("@")[0] ?? input;
+  return localPart.split(/[^a-z0-9]+/i).filter((token) => token.length > 0);
+}
+
+/**
+ * Scores a candidate password with zxcvbn (pattern/dictionary-based, unlike the length/class rules generateSuggestedPassword enforces).
+ * userInputs (e.g. the email typed into the same form) are added as an extra dictionary, tokenized piece and all — see tokenizeUserInput.
+ */
+export function evaluatePasswordStrength(
+  password: string,
+  userInputs: readonly string[] = [],
+): PasswordStrength {
+  if (!password) {
+    return {
+      score: 0,
+      label: "Too Short",
+      feedback: ["Enter a password to evaluate strength."],
+      crackTimeDisplay: "instant",
+    };
+  }
+
+  const zxcvbnInputs = userInputs.flatMap((input) => [input, ...tokenizeUserInput(input)]);
+  const result = zxcvbn(password, zxcvbnInputs);
+  const feedback: string[] = [];
+  if (result.feedback.warning) {
+    feedback.push(result.feedback.warning);
+  }
+  feedback.push(...result.feedback.suggestions);
+
+  return {
+    score: result.score,
+    label: STRENGTH_LABELS[result.score],
+    feedback,
+    crackTimeDisplay: String(result.crack_times_display.offline_slow_hashing_1e4_per_second),
+  };
 }

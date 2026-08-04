@@ -1,11 +1,12 @@
 /**
  * Tests for the Phase 3 password-quality helpers:
- * generateSuggestedPassword / isCommonPassword / isReusedPassword.
+ * generateSuggestedPassword / isCommonPassword / isReusedPassword / evaluatePasswordStrength.
  */
 import { describe, expect, it } from "vitest";
 
 import {
   DEFAULT_PASSWORD_OPTIONS,
+  evaluatePasswordStrength,
   generateSuggestedPassword,
   isCommonPassword,
   isReusedPassword,
@@ -143,5 +144,39 @@ describe("isReusedPassword", () => {
 
   it("returns false against an empty vault", () => {
     expect(isReusedPassword("anything", [])).toBe(false);
+  });
+});
+
+describe("evaluatePasswordStrength", () => {
+  it("rates an empty password as too short, without calling zxcvbn", () => {
+    const result = evaluatePasswordStrength("");
+    expect(result.score).toBe(0);
+    expect(result.label).toBe("Too Short");
+    expect(result.crackTimeDisplay).toBe("instant");
+  });
+
+  it("rates a well-known weak password as very weak with a warning", () => {
+    const result = evaluatePasswordStrength("password");
+    expect(result.score).toBe(0);
+    expect(result.label).toBe("Very Weak");
+    expect(result.feedback.length).toBeGreaterThan(0);
+  });
+
+  it("rates a long, unpredictable passphrase as strong", () => {
+    const result = evaluatePasswordStrength("correct-horse-battery-staple-9x");
+    expect(result.score).toBeGreaterThanOrEqual(3);
+    expect(result.label).toMatch(/Strong/);
+  });
+
+  it("penalizes a password built from just the local part of an email, not only a full match", () => {
+    const password = "kaelin82xyz!";
+    const withoutContext = evaluatePasswordStrength(password);
+    const withContext = evaluatePasswordStrength(password, ["kaelin82@example.com"]);
+    expect(withContext.score).toBeLessThan(withoutContext.score);
+  });
+
+  it("has no feedback once the password is strong", () => {
+    const result = evaluatePasswordStrength(generateSuggestedPassword({ ...DEFAULT_PASSWORD_OPTIONS, length: 32 }));
+    expect(result.feedback).toEqual([]);
   });
 });

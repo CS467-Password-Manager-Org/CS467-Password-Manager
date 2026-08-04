@@ -11,6 +11,7 @@ import type { RegisterResponse } from '@app/shared';
 import { useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import type { DerivedKeys } from '@app/crypto';
+import { PasswordStrengthInput } from '../components/PasswordStrengthInput';
 
 // registration they are redirected to the login page.
 export function RegisterPage({
@@ -75,16 +76,13 @@ export function RegisterPage({
         </div>
 
         <div className="field">
-          <label htmlFor="register-password">Enter your new Master Password</label>
-          <input
-            id="register-password"
-            type="password"
-            autoComplete="new-password"
-            onInput={(ev) => setFormPassword(ev.currentTarget.value)}
+          <PasswordStrengthInput
             value={formPassword}
+            onChange={setFormPassword}
+            userInputs={[formEmail]}
+            label="Enter your new Master Password"
           />
         </div>
-
         <div className="actions">
           <button className="primary" onClick={handleRegisterNewEmail}>
             Submit
