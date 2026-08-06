@@ -4,6 +4,7 @@ import {
   type LoginResponse,
   type MeResponse,
   type MfaActivateRequest,
+  type MfaDisableRequest,
   type MfaEnrollResponse,
   type MfaStatusResponse,
   type RegisterRequest,
@@ -21,6 +22,7 @@ export type ServerResponse<T> = {
 };
 
 const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
+const SESSION_EXPIRED_ERROR = 'Your session has expired. Please sign in again.';
 
 function rateLimitMessage(response: Response): string {
   const retryAfter = Number(response.headers.get('Retry-After'));
@@ -562,6 +564,8 @@ export async function activateMfa(code: string): Promise<ServerResponse<MfaStatu
       const errorBody = await response.json().catch(() => null);
       if (errorBody?.error === 'invalid_mfa_code') {
         publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 401) {
+        publicMessage = SESSION_EXPIRED_ERROR;
       } else if (response.status === 429) {
         publicMessage = rateLimitMessage(response);
       } else if (response.status >= 500 && response.status < 600) {
@@ -585,6 +589,66 @@ export async function activateMfa(code: string): Promise<ServerResponse<MfaStatu
     return {
       data: null,
       publicErrorMessage: DEFAULT_MFA_ACTIVATE_ERROR,
+    };
+  }
+}
+
+const DEFAULT_MFA_DISABLE_ERROR = 'Error removing MFA.';
+
+export async function disableMfa(code: string): Promise<ServerResponse<MfaStatusResponse | null>> {
+  const url = '/api/v1/auth/mfa';
+
+  const token = sessionStorage.getItem('token');
+  if (!token) {
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_DISABLE_ERROR,
+    };
+  }
+
+  const body: MfaDisableRequest = { code };
+
+  try {
+    const response = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      let publicMessage = DEFAULT_MFA_DISABLE_ERROR;
+
+      const errorBody = await response.json().catch(() => null);
+      if (errorBody?.error === 'invalid_mfa_code') {
+        publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 401) {
+        publicMessage = SESSION_EXPIRED_ERROR;
+      } else if (response.status === 429) {
+        publicMessage = rateLimitMessage(response);
+      } else if (response.status >= 500 && response.status < 600) {
+        publicMessage = DEFAULT_SERVER_ERROR;
+      }
+
+      return {
+        data: null,
+        publicErrorMessage: publicMessage,
+      };
+    }
+
+    const responseBody: MfaStatusResponse = await response.json();
+
+    return {
+      data: responseBody,
+      publicErrorMessage: '',
+    };
+  } catch (error) {
+    console.error(error);
+    return {
+      data: null,
+      publicErrorMessage: DEFAULT_MFA_DISABLE_ERROR,
     };
   }
 }
