@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
 import { MfaSetupForm } from '../components/MfaSetupForm';
+import { MfaDisableForm } from '../components/MfaDisableForm';
 import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from '@app/shared';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
@@ -149,6 +150,7 @@ export function PasswordsPage({
   enrollMfa,
   activateMfa,
   logout,
+  disableMfa,
   redirect,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
@@ -162,6 +164,7 @@ export function PasswordsPage({
   enrollMfa: () => Promise<ServerResponse<MfaEnrollResponse | null>>;
   activateMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
   logout: () => Promise<ServerResponse<null>>;
+  disableMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
   redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
@@ -170,6 +173,7 @@ export function PasswordsPage({
   const [deleteError, setDeleteError] = useState('');
   const [logoutError, setLogoutError] = useState('');
   const [userEmail, setUserEmail] = useState('');
+  const [filterText, setFilterText] = useState('');
   // Tri-state: null means "not known yet". Defaulting to false made the page
   // claim MFA was off before /me answered, so a user who has MFA enabled was
   // briefly told their account was unprotected and offered a setup form.
@@ -304,6 +308,16 @@ export function PasswordsPage({
     fetchData();
   }, []);
 
+  const normalizedFilter = filterText.trim().toLowerCase();
+  const filteredPasswords =
+    passwords && normalizedFilter
+      ? passwords.filter(
+          (p) =>
+            p.siteName.toLowerCase().includes(normalizedFilter) ||
+            p.username.toLowerCase().includes(normalizedFilter),
+        )
+      : passwords;
+
   return (
     <div>
       <div className="page-header">
@@ -316,7 +330,7 @@ export function PasswordsPage({
       {logoutError && <p className="error">Error: {logoutError}</p>}
 
       {mfaEnabled === null ? null : mfaEnabled ? (
-        <p className="muted">Multi-factor authentication is enabled.</p>
+        <MfaDisableForm disableMfa={disableMfa} onDisabled={() => setMfaEnabled(false)} />
       ) : (
         <MfaSetupForm
           enrollMfa={enrollMfa}
@@ -329,45 +343,67 @@ export function PasswordsPage({
       {deleteError && <p className="error">Error: {deleteError}</p>}
 
       {passwords && !passwordsError && passwords.length > 0 && (
-        // Wrapper scrolls instead of the page: a vault entry can hold a long
-        // site name or password, and a table that overflows the viewport would
-        // otherwise push the whole layout sideways.
-        <div
-          className="table-wrap"
-          ref={tableWrapRef}
-          tabIndex={tableScrollable ? 0 : undefined}
-          role={tableScrollable ? 'region' : undefined}
-          aria-label={tableScrollable ? 'Saved passwords' : undefined}
-        >
-          <table className="vault-table">
-            <thead>
-              <tr>
-                <th scope="col">Site</th>
-                <th scope="col">Username</th>
-                <th scope="col">Password</th>
-                <th scope="col" className="cell-actions">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {passwords.map((p) => (
-                <PasswordItem
-                  item={p}
-                  existingPasswords={passwords.filter((other) => other.id !== p.id)}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  key={p.id}
-                />
-              ))}
-            </tbody>
-          </table>
+        <div className="field">
+          <input
+            type="text"
+            placeholder="Filter by site or username"
+            aria-label="Filter passwords"
+            onInput={(ev) => setFilterText(ev.currentTarget.value)}
+            value={filterText}
+          />
         </div>
       )}
 
-      {passwords && !passwordsError && passwords.length === 0 && (
-        <div className="empty-state">No passwords found.</div>
-      )}
+      <div aria-live="polite">
+        {filteredPasswords && !passwordsError && filteredPasswords.length > 0 && (
+          // Wrapper scrolls instead of the page: a vault entry can hold a long
+          // site name or password, and a table that overflows the viewport would
+          // otherwise push the whole layout sideways.
+          <div
+            className="table-wrap"
+            ref={tableWrapRef}
+            tabIndex={tableScrollable ? 0 : undefined}
+            role={tableScrollable ? 'region' : undefined}
+            aria-label={tableScrollable ? 'Saved passwords' : undefined}
+          >
+            <table className="vault-table">
+              <thead>
+                <tr>
+                  <th scope="col">Site</th>
+                  <th scope="col">Username</th>
+                  <th scope="col">Password</th>
+                  <th scope="col" className="cell-actions">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPasswords.map((p) => (
+                  <PasswordItem
+                    item={p}
+                    existingPasswords={(passwords || []).filter((other) => other.id !== p.id)}
+                    onDelete={handleDelete}
+                    onEdit={handleEdit}
+                    key={p.id}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {passwords && !passwordsError && passwords.length === 0 && (
+          <div className="empty-state">No passwords found.</div>
+        )}
+
+        {passwords &&
+          !passwordsError &&
+          passwords.length > 0 &&
+          filteredPasswords &&
+          filteredPasswords.length === 0 && (
+            <div className="empty-state">No passwords match your filter.</div>
+          )}
+      </div>
 
       <CreatePasswordForm
         encryptVaultItem={encryptVaultItem}
@@ -375,6 +411,7 @@ export function PasswordsPage({
         encryptionKey={encryptionKey}
         existingPasswords={passwords ?? []}
         onSaved={async () => {
+          setFilterText('');
           if (encryptionKey) {
             await loadPasswords(encryptionKey);
           }

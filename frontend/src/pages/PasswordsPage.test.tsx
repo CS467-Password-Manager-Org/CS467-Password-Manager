@@ -21,26 +21,26 @@ function renderPasswordsPage(overrides = {}) {
     fetchVaultItems: vi.fn().mockResolvedValue({ data: [], publicErrorMessage: '' }),
     decryptVaultItem: vi.fn(),
     encryptVaultItem: vi.fn().mockResolvedValue('encrypted-blob'),
-    createVaultItem: vi
-      .fn()
-      .mockResolvedValue({
-        data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
-        publicErrorMessage: '',
-      }),
-    updateVaultItem: vi
-      .fn()
-      .mockResolvedValue({
-        data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
-        publicErrorMessage: '',
-      }),
+    createVaultItem: vi.fn().mockResolvedValue({
+      data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
+      publicErrorMessage: '',
+    }),
+    updateVaultItem: vi.fn().mockResolvedValue({
+      data: { id: 'item-1', encryptedData: 'encrypted-blob', createdAt: '', updatedAt: '' },
+      publicErrorMessage: '',
+    }),
     deleteVaultItem: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
     encryptionKey: STUB_KEY,
     fetchMe: vi
       .fn()
-      .mockResolvedValue({ data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false }, publicErrorMessage: '' }),
+      .mockResolvedValue({
+        data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false },
+        publicErrorMessage: '',
+      }),
     enrollMfa: vi.fn(),
     activateMfa: vi.fn(),
     logout: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
+    disableMfa: vi.fn(),
     redirect: vi.fn(),
     ...overrides,
   };
@@ -98,6 +98,85 @@ describe('PasswordsPage', () => {
     expect(screen.queryByText('No passwords found.')).not.toBeInTheDocument();
   });
 
+  it('does not show a filter input when there are no passwords', async () => {
+    renderPasswordsPage();
+
+    expect(await screen.findByText('No passwords found.')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Filter by site or username')).not.toBeInTheDocument();
+  });
+
+  it('filters passwords by site name', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [
+          { id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' },
+          { id: 'item-2', encryptedData: 'blob-2', createdAt: '', updatedAt: '' },
+        ],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValueOnce({ siteName: 'Email', username: 'someone', password: 'plaintext' })
+        .mockResolvedValueOnce({ siteName: 'Bank', username: 'other', password: 'plaintext2' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Bank')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'ema' },
+    });
+
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.queryByText('Bank')).not.toBeInTheDocument();
+  });
+
+  it('filters passwords by username, case-insensitively', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [
+          { id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' },
+          { id: 'item-2', encryptedData: 'blob-2', createdAt: '', updatedAt: '' },
+        ],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValueOnce({ siteName: 'Email', username: 'someone', password: 'plaintext' })
+        .mockResolvedValueOnce({ siteName: 'Bank', username: 'other', password: 'plaintext2' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'SOMEONE' },
+    });
+
+    expect(screen.getByText('Email')).toBeInTheDocument();
+    expect(screen.queryByText('Bank')).not.toBeInTheDocument();
+  });
+
+  it('shows a no-match message when the filter matches nothing', async () => {
+    renderPasswordsPage({
+      fetchVaultItems: vi.fn().mockResolvedValue({
+        data: [{ id: 'item-1', encryptedData: 'blob-1', createdAt: '', updatedAt: '' }],
+        publicErrorMessage: '',
+      }),
+      decryptVaultItem: vi
+        .fn()
+        .mockResolvedValue({ siteName: 'Email', username: 'someone', password: 'plaintext' }),
+    });
+
+    expect(await screen.findByText('Email')).toBeInTheDocument();
+
+    fireEvent.input(screen.getByPlaceholderText('Filter by site or username'), {
+      target: { value: 'nonexistent' },
+    });
+
+    expect(screen.queryByText('Email')).not.toBeInTheDocument();
+    expect(screen.getByText('No passwords match your filter.')).toBeInTheDocument();
+  });
+
   it('shows an error message when fetching vault items fails', async () => {
     const decryptVaultItem = vi.fn();
     renderPasswordsPage({
@@ -132,7 +211,9 @@ describe('PasswordsPage', () => {
 
   it('does not show a logged in message when there is no auth token', async () => {
     renderPasswordsPage({
-      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
+      fetchMe: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
     });
 
     await waitFor(() => expect(screen.queryByText(/Logged in as/)).not.toBeInTheDocument());
@@ -140,7 +221,9 @@ describe('PasswordsPage', () => {
 
   it('redirects to login when there is no auth token', async () => {
     const props = renderPasswordsPage({
-      fetchMe: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
+      fetchMe: vi
+        .fn()
+        .mockResolvedValue({ data: null, publicErrorMessage: 'Error fetching account details.' }),
     });
 
     await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
@@ -416,11 +499,11 @@ describe('PasswordsPage', () => {
     const props = renderPasswordsPage();
 
     expect(await screen.findByText('Set up MFA')).toBeInTheDocument();
-    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove MFA')).not.toBeInTheDocument();
     await waitFor(() => expect(props.fetchVaultItems).toHaveBeenCalled());
   });
 
-  it('shows MFA is enabled instead of the setup prompt when the account has MFA on', async () => {
+  it('shows a remove MFA prompt instead of the setup prompt when the account has MFA on', async () => {
     renderPasswordsPage({
       fetchMe: vi.fn().mockResolvedValue({
         data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
@@ -428,7 +511,7 @@ describe('PasswordsPage', () => {
       }),
     });
 
-    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(await screen.findByText('Remove MFA')).toBeInTheDocument();
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 
@@ -539,7 +622,7 @@ describe('PasswordsPage initial load behaviour', () => {
     renderPasswordsPage({ fetchMe: vi.fn().mockReturnValue(mePending) });
 
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
-    expect(screen.queryByText('Multi-factor authentication is enabled.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Remove MFA')).not.toBeInTheDocument();
 
     releaseMe({
       data: { id: 'user-1', email: 'user@example.com', mfaEnabled: true },
@@ -547,7 +630,7 @@ describe('PasswordsPage initial load behaviour', () => {
     });
 
     // Once known, the true state appears — and it is the enabled one.
-    expect(await screen.findByText('Multi-factor authentication is enabled.')).toBeInTheDocument();
+    expect(await screen.findByText('Remove MFA')).toBeInTheDocument();
     expect(screen.queryByText('Set up MFA')).not.toBeInTheDocument();
   });
 });

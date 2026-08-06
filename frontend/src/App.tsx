@@ -14,6 +14,7 @@ import {
   activateMfa,
   createVaultItem,
   deleteVaultItem,
+  disableMfa,
   enrollMfa,
   fetchMe,
   fetchVaultItems,
@@ -138,6 +139,7 @@ function Routes() {
           enrollMfa={enrollMfa}
           activateMfa={activateMfa}
           logout={logout}
+          disableMfa={disableMfa}
           redirect={redirect}
         />
       );
