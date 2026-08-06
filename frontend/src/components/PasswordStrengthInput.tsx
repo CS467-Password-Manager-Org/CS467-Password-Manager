@@ -42,6 +42,7 @@ export function PasswordStrengthInput({
           placeholder="Enter password..."
         />
         <button
+          style={{ marginTop: '1em' }}
           type="button"
           onClick={() => setShowPassword(!showPassword)}
           aria-label={showPassword ? 'Hide password' : 'Show password'}
