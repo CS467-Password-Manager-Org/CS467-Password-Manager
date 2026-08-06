@@ -2,6 +2,8 @@
 
 A zero-knowledge password manager. The browser derives the keys and encrypts the data; the server stores ciphertext it cannot read.
 
+**Live deployment:** [Open Secure Password Manager](https://ca-pwmgr-web-dev-001.thankfulcliff-1890d820.centralus.azurecontainerapps.io/)
+
 ## Setup
 
 ```bash
@@ -30,6 +32,8 @@ In production the frontend container also reverse-proxies `/api` to the API cont
 Shared frontend/backend types live in `packages/shared`.
 
 ### Deploying to Azure
+
+The live application is available at [ca-pwmgr-web-dev-001.thankfulcliff-1890d820.centralus.azurecontainerapps.io](https://ca-pwmgr-web-dev-001.thankfulcliff-1890d820.centralus.azurecontainerapps.io/).
 
 The stack runs on Azure Container Apps in `rg-pwmgr-dev`: `ca-pwmgr-web-dev-001` (nginx + bundle) and `ca-pwmgr-api-dev-001` (API), against the `psql-pwmgr-dev-1ce74e` flexible server. Images are built in the registry rather than locally, which avoids cross-compiling for `linux/amd64` from an Apple Silicon machine:
 
