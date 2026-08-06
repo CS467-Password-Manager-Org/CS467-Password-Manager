@@ -31,17 +31,16 @@ function renderPasswordsPage(overrides = {}) {
     }),
     deleteVaultItem: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
     encryptionKey: STUB_KEY,
-    fetchMe: vi
-      .fn()
-      .mockResolvedValue({
-        data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false },
-        publicErrorMessage: '',
-      }),
+    fetchMe: vi.fn().mockResolvedValue({
+      data: { id: 'user-1', email: 'user@example.com', mfaEnabled: false },
+      publicErrorMessage: '',
+    }),
     enrollMfa: vi.fn(),
     activateMfa: vi.fn(),
     logout: vi.fn().mockResolvedValue({ data: null, publicErrorMessage: '' }),
     disableMfa: vi.fn(),
     redirect: vi.fn(),
+    onLoggedOut: vi.fn(),
     ...overrides,
   };
 
@@ -448,7 +447,7 @@ describe('PasswordsPage', () => {
     expect(props.redirect).toHaveBeenCalledWith('/login');
   });
 
-  it('shows an error and keeps the session when logout fails', async () => {
+  it('still clears the session and redirects when the server-side logout call fails', async () => {
     sessionStorage.setItem('token', 'a-token');
     vi.mocked(clearEncryptionKey).mockClear();
     const props = renderPasswordsPage({
@@ -457,12 +456,31 @@ describe('PasswordsPage', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Log out' }));
 
-    expect(await screen.findByText('Error: Error logging out.')).toBeInTheDocument();
-    expect(sessionStorage.getItem('token')).toBe('a-token');
-    expect(clearEncryptionKey).not.toHaveBeenCalled();
-    expect(props.redirect).not.toHaveBeenCalled();
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
+    expect(sessionStorage.getItem('token')).toBeNull();
+    expect(clearEncryptionKey).toHaveBeenCalled();
+    expect(props.onLoggedOut).toHaveBeenCalled();
+  });
 
-    sessionStorage.removeItem('token');
+  it('disables the log out button while the request is in flight to prevent duplicate requests', async () => {
+    let resolveLogout!: (value: { data: null; publicErrorMessage: string }) => void;
+    const props = renderPasswordsPage({
+      logout: vi.fn().mockReturnValue(
+        new Promise((resolve) => {
+          resolveLogout = resolve;
+        }),
+      ),
+    });
+
+    const logoutButton = screen.getByRole('button', { name: 'Log out' });
+    fireEvent.click(logoutButton);
+    fireEvent.click(logoutButton);
+
+    expect(logoutButton).toBeDisabled();
+    expect(props.logout).toHaveBeenCalledTimes(1);
+
+    resolveLogout({ data: null, publicErrorMessage: '' });
+    await waitFor(() => expect(props.redirect).toHaveBeenCalledWith('/login'));
   });
 
   it('encrypts and saves changes when editing a password entry', async () => {

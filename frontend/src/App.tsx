@@ -141,6 +141,7 @@ function Routes() {
           logout={logout}
           disableMfa={disableMfa}
           redirect={redirect}
+          onLoggedOut={() => setEncryptionKey(undefined)}
         />
       );
     default:
