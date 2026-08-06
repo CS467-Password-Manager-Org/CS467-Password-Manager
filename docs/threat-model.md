@@ -155,11 +155,12 @@ Explicitly out of scope for this deployment, which targets a single local Docker
 
 **Server-side breach detection and audit logging.** There is no intrusion detection, no anomaly alerting, and no durable audit trail of authentication events. Errors are logged to the container's standard output for operational debugging only.
 
-**Client-side cryptography.** Key derivation and AES-256-GCM encryption run in the browser and are covered separately. The central claim assumes the client encrypts correctly before transmitting; the server can guarantee it never receives a key, not that the ciphertext it stores was well made.
+**Client-side cryptography.** Key derivation and AES-256-GCM encryption run in the browser and are covered in [`crypto-threat-model.md`](./crypto-threat-model.md). The central claim assumes the client encrypts correctly before transmitting; the server can guarantee it never receives a key, not that the ciphertext it stores was well made.
 
 ## Related documentation
 
 | Document | What it covers |
 |---|---|
+| [`crypto-threat-model.md`](./crypto-threat-model.md) | Key derivation, encryption, and payload handling in `packages/crypto` and `frontend/src/keyStore.ts` |
 | [`api.md`](./api.md) | Endpoint contract, error shapes, and the database schema |
 | [`api-testing.md`](./api-testing.md) | Manual walkthroughs, including the cross-user isolation check |

@@ -52,6 +52,14 @@ It is zero-knowledge by construction: the master password and the master key nev
 - **[docs/threat-model.md](docs/threat-model.md)** — assets, threats, mitigations, and explicit non-goals
 - **[docs/api-testing.md](docs/api-testing.md)** — manual curl runbook for testing the API locally
 
+## Client-side cryptography
+
+All key derivation and encryption happens in the browser, in `packages/crypto`. A master password and a per-user salt go through one Argon2id run (64 MiB, 3 iterations by default) to produce a master key, which is then split via HKDF into two independent keys: an `authKey` (raw bytes, sent to the server as the login credential — the only key-derived material that ever leaves the browser) and an `encryptionKey` (a non-extractable AES-256-GCM `CryptoKey` that never leaves, not even in principle — `crypto.subtle.exportKey` on it rejects).
+
+Vault items are encrypted with AES-256-GCM under a fresh random 12-byte nonce per call and encoded as `version‖nonce‖ciphertext`, base64-encoded, before being sent to the API — this is the `encryptedData` the server stores and never parses. To survive a page reload without re-deriving the key, `frontend/src/keyStore.ts` persists the `CryptoKey` handle itself (not its bytes) in IndexedDB, scoped to the session and cleared when it ends.
+
+- **[docs/crypto-threat-model.md](docs/crypto-threat-model.md)** — key derivation, encryption, payload handling, and their non-goals (XSS, decrypted plaintext in memory)
+
 ## Testing
 
 ```bash
