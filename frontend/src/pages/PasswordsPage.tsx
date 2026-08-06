@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { ServerResponse } from '../serverAPI';
 import { PasswordItem, type DecryptedVaultItem } from '../components/PasswordItem';
 import { MfaSetupForm } from '../components/MfaSetupForm';
+import { MfaDisableForm } from '../components/MfaDisableForm';
 import type { MeResponse, MfaEnrollResponse, MfaStatusResponse, VaultItem } from '@app/shared';
 import { generateSuggestedPassword, type VaultItemSecret } from '@app/crypto';
 import { PasswordWarnings } from '../components/PasswordWarnings';
@@ -148,6 +149,7 @@ export function PasswordsPage({
   fetchMe,
   enrollMfa,
   activateMfa,
+  disableMfa,
   redirect,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
@@ -160,6 +162,7 @@ export function PasswordsPage({
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
   enrollMfa: () => Promise<ServerResponse<MfaEnrollResponse | null>>;
   activateMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
+  disableMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
   redirect: (route: string) => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
@@ -301,7 +304,7 @@ export function PasswordsPage({
       {userEmail && <p className="muted">Logged in as {userEmail}</p>}
 
       {mfaEnabled === null ? null : mfaEnabled ? (
-        <p className="muted">Multi-factor authentication is enabled.</p>
+        <MfaDisableForm disableMfa={disableMfa} onDisabled={() => setMfaEnabled(false)} />
       ) : (
         <MfaSetupForm
           enrollMfa={enrollMfa}
