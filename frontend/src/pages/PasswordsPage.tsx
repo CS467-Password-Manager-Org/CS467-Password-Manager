@@ -328,54 +328,56 @@ export function PasswordsPage({
         </div>
       )}
 
-      {filteredPasswords && !passwordsError && filteredPasswords.length > 0 && (
-        // Wrapper scrolls instead of the page: a vault entry can hold a long
-        // site name or password, and a table that overflows the viewport would
-        // otherwise push the whole layout sideways.
-        <div
-          className="table-wrap"
-          ref={tableWrapRef}
-          tabIndex={tableScrollable ? 0 : undefined}
-          role={tableScrollable ? 'region' : undefined}
-          aria-label={tableScrollable ? 'Saved passwords' : undefined}
-        >
-          <table className="vault-table">
-            <thead>
-              <tr>
-                <th scope="col">Site</th>
-                <th scope="col">Username</th>
-                <th scope="col">Password</th>
-                <th scope="col" className="cell-actions">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPasswords.map((p) => (
-                <PasswordItem
-                  item={p}
-                  existingPasswords={(passwords || []).filter((other) => other.id !== p.id)}
-                  onDelete={handleDelete}
-                  onEdit={handleEdit}
-                  key={p.id}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {passwords && !passwordsError && passwords.length === 0 && (
-        <div className="empty-state">No passwords found.</div>
-      )}
-
-      {passwords &&
-        !passwordsError &&
-        passwords.length > 0 &&
-        filteredPasswords &&
-        filteredPasswords.length === 0 && (
-          <div className="empty-state">No passwords match your filter.</div>
+      <div aria-live="polite">
+        {filteredPasswords && !passwordsError && filteredPasswords.length > 0 && (
+          // Wrapper scrolls instead of the page: a vault entry can hold a long
+          // site name or password, and a table that overflows the viewport would
+          // otherwise push the whole layout sideways.
+          <div
+            className="table-wrap"
+            ref={tableWrapRef}
+            tabIndex={tableScrollable ? 0 : undefined}
+            role={tableScrollable ? 'region' : undefined}
+            aria-label={tableScrollable ? 'Saved passwords' : undefined}
+          >
+            <table className="vault-table">
+              <thead>
+                <tr>
+                  <th scope="col">Site</th>
+                  <th scope="col">Username</th>
+                  <th scope="col">Password</th>
+                  <th scope="col" className="cell-actions">
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredPasswords.map((p) => (
+                  <PasswordItem
+                    item={p}
+                    existingPasswords={(passwords || []).filter((other) => other.id !== p.id)}
+                    onDelete={handleDelete}
+                    onEdit={handleEdit}
+                    key={p.id}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
+
+        {passwords && !passwordsError && passwords.length === 0 && (
+          <div className="empty-state">No passwords found.</div>
+        )}
+
+        {passwords &&
+          !passwordsError &&
+          passwords.length > 0 &&
+          filteredPasswords &&
+          filteredPasswords.length === 0 && (
+            <div className="empty-state">No passwords match your filter.</div>
+          )}
+      </div>
 
       <CreatePasswordForm
         encryptVaultItem={encryptVaultItem}
@@ -383,6 +385,7 @@ export function PasswordsPage({
         encryptionKey={encryptionKey}
         existingPasswords={passwords ?? []}
         onSaved={async () => {
+          setFilterText('');
           if (encryptionKey) {
             await loadPasswords(encryptionKey);
           }
