@@ -149,8 +149,10 @@ export function PasswordsPage({
   fetchMe,
   enrollMfa,
   activateMfa,
+  logout,
   disableMfa,
   redirect,
+  onLoggedOut,
 }: {
   fetchVaultItems: () => Promise<ServerResponse<VaultItem[] | null>>;
   decryptVaultItem: (payload: string, key: CryptoKey) => Promise<VaultItemSecret>;
@@ -162,13 +164,17 @@ export function PasswordsPage({
   fetchMe: () => Promise<ServerResponse<MeResponse | null>>;
   enrollMfa: () => Promise<ServerResponse<MfaEnrollResponse | null>>;
   activateMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
+  logout: () => Promise<ServerResponse<null>>;
   disableMfa: (code: string) => Promise<ServerResponse<MfaStatusResponse | null>>;
   redirect: (route: string) => void;
+  onLoggedOut: () => void;
 }) {
   const [passwords, setPasswords] = useState<DecryptedVaultItem[] | null>(null);
   const [tableWrapRef, tableScrollable] = useIsScrollable();
   const [passwordsError, setPasswordsError] = useState('');
   const [deleteError, setDeleteError] = useState('');
+  const [logoutError, setLogoutError] = useState('');
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [userEmail, setUserEmail] = useState('');
   const [filterText, setFilterText] = useState('');
   // Tri-state: null means "not known yet". Defaulting to false made the page
@@ -222,6 +228,29 @@ export function PasswordsPage({
     if (encryptionKey) {
       await loadPasswords(encryptionKey);
     }
+  };
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    setLogoutError('');
+
+    // Try to revoke the token server-side, but clean up locally regardless of
+    // whether that succeeds. A failure here is most often the token already
+    // being dead (expired or previously revoked), in which case there is
+    // nothing left to strand server-side — and refusing to clear local state
+    // would instead make sign-out impossible exactly when the session is
+    // already broken. Surface the server error as a warning rather than
+    // blocking on it.
+    const { publicErrorMessage } = await logout();
+    if (publicErrorMessage) {
+      setLogoutError(publicErrorMessage);
+    }
+
+    sessionStorage.removeItem('token');
+    await clearEncryptionKey();
+    onLoggedOut();
+    redirect('/login');
   };
 
   const handleEdit = async (
@@ -300,8 +329,14 @@ export function PasswordsPage({
 
   return (
     <div>
-      <h2>Passwords</h2>
+      <div className="page-header">
+        <h2>Passwords</h2>
+        <button type="button" onClick={handleLogout} disabled={isLoggingOut}>
+          Log out
+        </button>
+      </div>
       {userEmail && <p className="muted">Logged in as {userEmail}</p>}
+      {logoutError && <p className="error">Error: {logoutError}</p>}
 
       {mfaEnabled === null ? null : mfaEnabled ? (
         <MfaDisableForm disableMfa={disableMfa} onDisabled={() => setMfaEnabled(false)} />

@@ -20,6 +20,7 @@ import {
   fetchVaultItems,
   fetchUserSalt,
   login,
+  logout,
   registerNewEmail,
   updateVaultItem,
 } from './serverAPI';
@@ -137,8 +138,10 @@ function Routes() {
           fetchMe={fetchMe}
           enrollMfa={enrollMfa}
           activateMfa={activateMfa}
+          logout={logout}
           disableMfa={disableMfa}
           redirect={redirect}
+          onLoggedOut={() => setEncryptionKey(undefined)}
         />
       );
     default:
