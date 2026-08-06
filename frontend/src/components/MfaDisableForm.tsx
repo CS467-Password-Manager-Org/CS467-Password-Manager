@@ -12,6 +12,7 @@ export function MfaDisableForm({
   const [confirming, setConfirming] = useState(false);
   const [code, setCode] = useState('');
   const [disableError, setDisableError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleRemove = async (ev: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
     ev.preventDefault();
@@ -22,10 +23,13 @@ export function MfaDisableForm({
     }
 
     setDisableError('');
+    setSubmitting(true);
 
     const { publicErrorMessage } = await disableMfa(code);
+    setSubmitting(false);
     if (publicErrorMessage) {
       setDisableError(publicErrorMessage);
+      setCode('');
       return;
     }
 
@@ -69,18 +73,18 @@ export function MfaDisableForm({
             id="mfa-disable-code"
             type="text"
             inputMode="numeric"
-            maxLength={6}
+            maxLength={7}
             autoComplete="one-time-code"
             placeholder="6-digit code"
-            onInput={(ev) => setCode(ev.currentTarget.value)}
+            onInput={(ev) => setCode(ev.currentTarget.value.replace(/\s/g, '').slice(0, 6))}
             value={code}
           />
         </div>
         <div className="actions">
-          <button className="primary" onClick={handleRemove}>
+          <button className="primary" onClick={handleRemove} disabled={submitting}>
             Remove MFA
           </button>
-          <button type="button" onClick={handleCancel}>
+          <button type="button" onClick={handleCancel} disabled={submitting}>
             Cancel
           </button>
         </div>

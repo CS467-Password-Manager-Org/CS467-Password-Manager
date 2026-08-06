@@ -22,6 +22,7 @@ export type ServerResponse<T> = {
 };
 
 const DEFAULT_SERVER_ERROR = 'Unable to reach the server. Please try again later.';
+const SESSION_EXPIRED_ERROR = 'Your session has expired. Please sign in again.';
 
 function rateLimitMessage(response: Response): string {
   const retryAfter = Number(response.headers.get('Retry-After'));
@@ -563,6 +564,8 @@ export async function activateMfa(code: string): Promise<ServerResponse<MfaStatu
       const errorBody = await response.json().catch(() => null);
       if (errorBody?.error === 'invalid_mfa_code') {
         publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 401) {
+        publicMessage = SESSION_EXPIRED_ERROR;
       } else if (response.status === 429) {
         publicMessage = rateLimitMessage(response);
       } else if (response.status >= 500 && response.status < 600) {
@@ -621,6 +624,8 @@ export async function disableMfa(code: string): Promise<ServerResponse<MfaStatus
       const errorBody = await response.json().catch(() => null);
       if (errorBody?.error === 'invalid_mfa_code') {
         publicMessage = 'Incorrect code. Please try again.';
+      } else if (response.status === 401) {
+        publicMessage = SESSION_EXPIRED_ERROR;
       } else if (response.status === 429) {
         publicMessage = rateLimitMessage(response);
       } else if (response.status >= 500 && response.status < 600) {
